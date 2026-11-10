@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	DefaultCollapsedWidth  = 440
-	DefaultCollapsedHeight = 56
+	DefaultCollapsedWidth  = 200
+	DefaultCollapsedHeight = 38
 	DefaultExpandedWidth   = 660
 	DefaultExpandedHeight  = 520
 )
