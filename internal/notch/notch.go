@@ -24,8 +24,9 @@ const (
 	DefaultExpandedHeight  = 520
 
 	// notchSideWidth is the room kept on each side of the camera housing for
-	// the idle pill's content.
-	notchSideWidth = 64
+	// the idle pill's content. Keep it tight: every extra point covers the
+	// menu bar on a notched display.
+	notchSideWidth = 48
 )
 
 // Options configures the island window.
