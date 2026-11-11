@@ -19,7 +19,7 @@ const (
 	EventHover = "island:hover"
 
 	DefaultCollapsedWidth  = 200
-	DefaultCollapsedHeight = 38
+	DefaultCollapsedHeight = 46
 	DefaultExpandedWidth   = 660
 	DefaultExpandedHeight  = 520
 
