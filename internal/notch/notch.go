@@ -18,6 +18,10 @@ const (
 	DefaultCollapsedHeight = 38
 	DefaultExpandedWidth   = 660
 	DefaultExpandedHeight  = 520
+
+	// notchSideWidth is the room kept on each side of the camera housing for
+	// the idle pill's content.
+	notchSideWidth = 64
 )
 
 // Options configures the island window.
@@ -36,7 +40,8 @@ type Options struct {
 	ExpandedWidth  int
 	ExpandedHeight int
 
-	// TopGap is the distance from the top of the screen work area.
+	// TopGap is the distance from the top edge of the display (not the work
+	// area), so the island docks over the menu bar by default.
 	TopGap int
 }
 
@@ -115,6 +120,14 @@ func normalise(opts Options) Options {
 	}
 	if opts.CollapsedWidth <= 0 {
 		opts.CollapsedWidth = DefaultCollapsedWidth
+		// The camera housing hides the centre of the docked window, so on a
+		// notched display the idle pill has to be wide enough to show content
+		// on both sides of it.
+		if housing := cameraHousingWidth(); housing > 0 {
+			if widened := housing + 2*notchSideWidth; widened > opts.CollapsedWidth {
+				opts.CollapsedWidth = widened
+			}
+		}
 	}
 	if opts.CollapsedHeight <= 0 {
 		opts.CollapsedHeight = DefaultCollapsedHeight
@@ -131,15 +144,17 @@ func normalise(opts Options) Options {
 // Window exposes the underlying webview window for tray attachment or tests.
 func (c *Controller) Window() *application.WebviewWindow { return c.win }
 
-// PlaceAndShow positions the island at the top centre of the current screen
-// and makes it visible. It is safe to call more than once (for example after a
-// display configuration change).
+// PlaceAndShow positions the island at the top centre of the built-in display
+// and makes it visible. The built-in display is preferred over the primary one
+// so a multi-monitor setup still starts the island on the laptop screen. It is
+// safe to call more than once (for example after a display configuration
+// change).
 func (c *Controller) PlaceAndShow() {
 	c.mu.Lock()
 	c.visible = true
 	c.mu.Unlock()
 
-	c.applyFrame()
+	c.applyFrameOn(c.defaultScreen())
 	c.win.Show()
 }
 
@@ -222,21 +237,23 @@ func (c *Controller) Focus() { c.win.Focus() }
 // without holding it: Wails window calls can synchronise with the UI thread,
 // and holding the lock across that boundary risks a deadlock with tray-menu
 // callbacks.
-func (c *Controller) applyFrame() {
+func (c *Controller) applyFrame() { c.applyFrameOn(c.currentScreen()) }
+
+func (c *Controller) applyFrameOn(screen *application.Screen) {
 	c.mu.Lock()
 	expanded := c.expanded
 	c.mu.Unlock()
 
 	width, height := c.sizeFor(expanded)
 
-	screen := c.currentScreen()
 	if screen == nil {
 		c.win.SetSize(width, height)
 		return
 	}
 
 	x := screen.Bounds.X + (screen.Bounds.Width-width)/2
-	y := screen.WorkArea.Y + c.opts.TopGap
+	// Docked to the top edge of the display, over the menu bar.
+	y := screen.Bounds.Y + c.opts.TopGap
 
 	c.win.SetBounds(application.Rect{
 		X:      x,
@@ -258,6 +275,16 @@ func (c *Controller) sizeFor(expanded bool) (int, int) {
 func (c *Controller) currentScreen() *application.Screen {
 	if screen, err := c.win.GetScreen(); err == nil && screen != nil {
 		return screen
+	}
+	return c.defaultScreen()
+}
+
+// defaultScreen prefers the built-in display, so startup lands on the laptop
+// screen even when an external display is primary. Wails has not loaded its
+// screen list yet when the app starts, so macOS supplies the frame directly.
+func (c *Controller) defaultScreen() *application.Screen {
+	if bounds, ok := builtinScreenBounds(); ok {
+		return &application.Screen{Bounds: bounds}
 	}
 	return c.app.Screen.GetPrimary()
 }
