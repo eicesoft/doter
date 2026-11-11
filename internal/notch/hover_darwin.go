@@ -12,7 +12,9 @@ static int islandMouseInside(void *nsWindow) {
 	if (window == nil || !window.isVisible) {
 		return 0;
 	}
-	return NSPointInRect([NSEvent mouseLocation], window.frame) ? 1 : 0;
+	NSRect frame = NSInsetRect(window.frame, -2, -2);
+	NSPoint p = [NSEvent mouseLocation];
+	return NSPointInRect(p, frame) ? 1 : 0;
 }
 */
 import "C"
