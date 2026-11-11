@@ -14,6 +14,10 @@ import (
 )
 
 const (
+	// EventHover is emitted with a bool when the pointer enters or leaves the
+	// window, including while the app is inactive.
+	EventHover = "island:hover"
+
 	DefaultCollapsedWidth  = 200
 	DefaultCollapsedHeight = 38
 	DefaultExpandedWidth   = 660
@@ -155,6 +159,9 @@ func (c *Controller) PlaceAndShow() {
 	c.mu.Unlock()
 
 	c.applyFrameOn(c.defaultScreen())
+	watchHover(c.win.NativeWindow(), func(entered bool) {
+		c.app.Event.Emit(EventHover, entered)
+	})
 	c.win.Show()
 }
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Events } from "@wailsio/runtime";
 
 import * as IslandService from "../bindings/doter/internal/services/islandservice";
 import { CollapsedBar } from "./components/CollapsedBar";
@@ -82,6 +83,33 @@ function App() {
     root.style.setProperty("--island-idle-width", `${window.innerWidth - 12}px`);
     root.style.setProperty("--island-idle-height", `${window.innerHeight - 8}px`);
   }, []);
+
+  useEffect(() => {
+    // Native hover events fire even while the app is inactive, where the DOM
+    // enter/leave handlers below stay silent.
+    let leaveTimer: number | null = null;
+    const unsubscribe = Events.On("island:hover", (event) => {
+      if (leaveTimer !== null) {
+        window.clearTimeout(leaveTimer);
+        leaveTimer = null;
+      }
+      if (event.data === true) {
+        expand();
+        return;
+      }
+      // Resizing the window on expand can bounce the tracking area; this delay
+      // keeps that from collapsing the island right after it opened.
+      leaveTimer = window.setTimeout(() => {
+        leaveTimer = null;
+        collapse();
+      }, 120);
+    });
+
+    return () => {
+      if (leaveTimer !== null) window.clearTimeout(leaveTimer);
+      unsubscribe();
+    };
+  }, [expand, collapse]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
