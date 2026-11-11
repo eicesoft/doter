@@ -16,6 +16,8 @@
   --accent-net: #22d3ee;
   --accent-battery: #fbbf24;
   --accent-sys: #f472b6;
+  --accent-warn: #f59e0b;
+  --accent-danger: #ef4444;
 
   /* Bottom corners of the island (tune these to taste). */
   --island-radius-collapsed: 7px;
@@ -169,22 +171,11 @@ body {
   min-width: 20px;
 }
 
-.quick-meter {
-  display: block;
-  width: 26px;
-  height: 4px;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
+.memory-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   flex: none;
-}
-
-.quick-meter span {
-  display: block;
-  height: 100%;
-  border-radius: 99px;
-  background: var(--accent-mem);
-  transition: width 700ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .net-arrow {

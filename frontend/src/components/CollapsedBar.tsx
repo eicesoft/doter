@@ -1,5 +1,5 @@
 import type { Snapshot } from "../../bindings/doter/internal/sysinfo/models";
-import { clampPercent, formatPercent } from "../lib/format";
+import { formatPercent } from "../lib/format";
 
 interface CollapsedBarProps {
   snapshot: Snapshot | null;
@@ -25,30 +25,17 @@ function CpuIcon() {
   );
 }
 
-/** A memory stick glyph standing in for the "MEM" label. */
-function MemoryIcon() {
-  return (
-    <svg
-      className="quick-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      role="img"
-      aria-label="Memory"
-    >
-      <rect x="2.5" y="7" width="19" height="9" rx="1.5" />
-      <path d="M6 16v3M11 16v3M16 16v3" />
-    </svg>
-  );
-}
-
 /** The idle pill: CPU and memory at a glance. */
 export function CollapsedBar({ snapshot }: CollapsedBarProps) {
   const cpu = snapshot?.cpu.usage ?? 0;
   const memory = snapshot?.memory.usedPercent ?? 0;
+
+  const memoryColour =
+    memory >= 80
+      ? "var(--accent-danger)"
+      : memory >= 60
+        ? "var(--accent-warn)"
+        : "var(--accent-cpu)";
 
   return (
     <div className="collapsed-bar">
@@ -58,10 +45,12 @@ export function CollapsedBar({ snapshot }: CollapsedBarProps) {
       </div>
 
       <div className="quick">
-        <MemoryIcon />
-        <span className="quick-meter" aria-hidden="true">
-          <span style={{ width: `${clampPercent(memory)}%` }} />
-        </span>
+        <span
+          className="memory-dot"
+          style={{ background: memoryColour, boxShadow: `0 0 6px ${memoryColour}` }}
+          aria-hidden="true"
+        />
+        <span className="quick-value">{formatPercent(memory)}</span>
       </div>
     </div>
   );
