@@ -93,7 +93,7 @@ function App() {
         if (!openRef.current) void expand();
       }}
     >
-      <CollapsedBar snapshot={snapshot} clock={clock} />
+      <CollapsedBar snapshot={snapshot} />
 
       <ExpandedPanel
         snapshot={snapshot}

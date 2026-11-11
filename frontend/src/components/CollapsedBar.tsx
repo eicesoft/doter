@@ -1,13 +1,12 @@
 import type { Snapshot } from "../../bindings/doter/internal/sysinfo/models";
-import { clampPercent, formatClock, formatPercent } from "../lib/format";
+import { clampPercent, formatPercent } from "../lib/format";
 
 interface CollapsedBarProps {
   snapshot: Snapshot | null;
-  clock: Date;
 }
 
-/** The idle pill: CPU, time and memory at a glance. */
-export function CollapsedBar({ snapshot, clock }: CollapsedBarProps) {
+/** The idle pill: CPU and memory at a glance. */
+export function CollapsedBar({ snapshot }: CollapsedBarProps) {
   const cpu = snapshot?.cpu.usage ?? 0;
   const memory = snapshot?.memory.usedPercent ?? 0;
 
@@ -17,8 +16,6 @@ export function CollapsedBar({ snapshot, clock }: CollapsedBarProps) {
         <span className="quick-label">CPU</span>
         <span className="quick-value">{formatPercent(cpu)}</span>
       </div>
-
-      <div className="quick-clock">{formatClock(clock)}</div>
 
       <div className="quick">
         <span className="quick-label">MEM</span>

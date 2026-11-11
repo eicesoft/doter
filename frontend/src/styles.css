@@ -202,14 +202,6 @@ body {
   color: var(--accent-cpu);
 }
 
-.quick-clock {
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  color: #e4e8ef;
-  flex: none;
-}
-
 /* --- Expanded panel ------------------------------------------------------- */
 
 .panel {
