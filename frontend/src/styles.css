@@ -66,8 +66,10 @@ body {
 
 .island {
   position: relative;
-  width: calc(100% - 12px);
-  height: calc(100% - 8px);
+  /* Idle size in pixels, set from App.tsx; the expanded size mirrors the
+     native 660x520 window minus its 20x14 inset. */
+  width: var(--island-idle-width, 188px);
+  height: var(--island-idle-height, 30px);
   background:
     radial-gradient(120% 150% at 50% 0%, #11141b 0%, #090b10 52%, #050608 100%);
   border: 1px solid rgba(255, 255, 255, 0.075);
@@ -76,14 +78,14 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
   transition:
-    width 420ms cubic-bezier(0.32, 0.72, 0, 1),
-    height 420ms cubic-bezier(0.32, 0.72, 0, 1),
-    border-radius 420ms cubic-bezier(0.32, 0.72, 0, 1);
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .island[data-open="true"] {
-  width: calc(100% - 20px);
-  height: calc(100% - 14px);
+  width: 640px;
+  height: 506px;
   border-radius: 0 0 var(--island-radius-expanded) var(--island-radius-expanded);
 }
 
@@ -199,12 +201,12 @@ body {
   display: flex;
   flex-direction: column;
   opacity: 0;
-  transform: translateY(-8px) scale(0.994);
+  transform: translateY(-14px) scale(0.98);
   transform-origin: 50% 0;
   pointer-events: none;
   transition:
-    opacity 200ms ease,
-    transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
+    opacity 160ms ease-out,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: opacity, transform;
 }
 
@@ -212,7 +214,7 @@ body {
   opacity: 1;
   transform: none;
   pointer-events: auto;
-  transition-delay: 70ms;
+  transition-delay: 90ms;
 }
 
 .panel-header {

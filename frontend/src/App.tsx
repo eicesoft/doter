@@ -74,6 +74,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // The native window snaps to the expanded size before the CSS transition
+    // runs. Percentages would jump with it, so lock the idle size in pixels
+    // while the window still shows the collapsed frame: the island then grows
+    // smoothly from the pill instead of appearing at full size.
+    const root = document.documentElement;
+    root.style.setProperty("--island-idle-width", `${window.innerWidth - 12}px`);
+    root.style.setProperty("--island-idle-height", `${window.innerHeight - 8}px`);
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         collapse(true);
