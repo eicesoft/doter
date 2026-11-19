@@ -4,7 +4,6 @@ package clipboard
 
 import (
 	"bytes"
-	"context"
 	"image"
 	"image/color"
 	"image/png"
@@ -13,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // The watcher reads the real system pasteboard, so these tests drive it with
@@ -22,16 +20,20 @@ func TestWatcherCapturesCopiedText(t *testing.T) {
 	history := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
 	watcher := NewWatcher(history)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	watcher.Start(ctx)
-
 	content := "watcher test 中文"
 	cmd := exec.Command("pbcopy")
 	cmd.Stdin = strings.NewReader(content)
 	if err := cmd.Run(); err != nil {
 		t.Skipf("pbcopy unavailable: %v", err)
 	}
+	if isSensitive() {
+		t.Skip("pasteboard was marked transient by another app")
+	}
+
+	// Poll directly instead of waiting for the ticker: a clipboard manager
+	// running in the test environment can rewrite the pasteboard with a
+	// transient marker between the copy and the next tick.
+	watcher.poll()
 
 	select {
 	case entry := <-watcher.Updates():
@@ -41,7 +43,7 @@ func TestWatcherCapturesCopiedText(t *testing.T) {
 		if entry.Kind != "text" {
 			t.Fatalf("kind = %q, want text", entry.Kind)
 		}
-	case <-time.After(5 * time.Second):
+	default:
 		t.Fatal("watcher did not report the copy")
 	}
 }
@@ -50,22 +52,36 @@ func TestWatcherIgnoresUnchangedPasteboard(t *testing.T) {
 	history := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
 	watcher := NewWatcher(history)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	watcher.Start(ctx)
+	// Put a known, non-concealed value on the pasteboard. The ambient
+	// pasteboard may be marked transient by an input method or password
+	// manager, which the privacy filter deliberately skips.
+	initial := "initial clipboard contents"
+	cmd := exec.Command("pbcopy")
+	cmd.Stdin = strings.NewReader(initial)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("pbcopy unavailable: %v", err)
+	}
+	if isSensitive() {
+		t.Skip("pasteboard was marked transient by another app")
+	}
 
-	// The first poll always captures whatever is already on the pasteboard.
+	// The first poll captures whatever is already on the pasteboard.
+	watcher.poll()
 	select {
-	case <-watcher.Updates():
-	case <-time.After(5 * time.Second):
+	case entry := <-watcher.Updates():
+		if entry.Content != initial {
+			t.Fatalf("initial entry = %q, want %q", entry.Content, initial)
+		}
+	default:
 		t.Fatal("watcher did not report the initial pasteboard contents")
 	}
 
 	// Nothing changed, so no further entries should arrive.
+	watcher.poll()
 	select {
 	case entry := <-watcher.Updates():
 		t.Fatalf("watcher reported an unexpected change: %q", entry.Content)
-	case <-time.After(1200 * time.Millisecond):
+	default:
 	}
 }
 
@@ -107,7 +123,7 @@ func TestImageRoundTrip(t *testing.T) {
 		t.Fatalf("thumbnail not scaled: cfg=%+v err=%v", cfg, err)
 	}
 
-	entry, ok := history.AddImage(pngData, "data:image/png;base64,AAAA", 64, 48)
+	entry, ok := history.AddImage(pngData, "data:image/png;base64,AAAA", 64, 48, "")
 	if !ok || entry.Kind != "image" {
 		t.Fatalf("image entry not stored: %+v", entry)
 	}

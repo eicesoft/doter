@@ -23,10 +23,14 @@
 - 电池电量、充电状态、剩余时间（无电池时显示 AC）
 - 系统运行时长、Load Average、架构
 - CPU 占用最高的进程列表
+- 剪贴板页：文字 / 链接 / 图片 / 富文本历史，支持搜索、置顶、删除、点击写回；记录来源应用，跳过密码管理器与标记为隐藏 / 临时的内容，可随时暂停记录
 - 音乐页：系统 Now Playing 的封面、曲名、歌手、专辑与进度，支持播放/暂停、上一首/下一首、拖拽进度、随机/循环（按播放器能力显示）
 - Agent 页：监控 Claude Code / Codex CLI 会话，显示运行/等待/结束状态、项目、模型、分支、轮次与累计 / 上下文 token
+- 桌面告警：CPU 持续高负载、内存 / Swap 过高、磁盘空间不足、电量过低，以及长时间运行的 Agent 结束或等待输入时发送系统通知；点击通知回到对应页面
 
-点击右上角图钉可保持展开，`Esc` 收起。图钉左侧的设置按钮可开关指标卡片、悬停展开与时钟秒数，偏好保存在本机。托盘菜单可显示 / 隐藏、退出；全局快捷键 `Ctrl+Shift+D` 切换显示 / 隐藏。
+点击右上角图钉可保持展开，`Esc` 收起。图钉左侧的设置按钮可开关指标卡片、悬停展开、时钟秒数、桌面告警、剪贴板记录与剪贴板快捷键。托盘菜单可显示 / 隐藏、退出；全局快捷键 `Ctrl+Shift+D` 切换显示 / 隐藏，`Cmd/Ctrl+Shift+V` 直接打开剪贴板页。
+
+> 剪贴板后端目前完整实现于 macOS；Windows / Linux 的对应后端仍为空，页面会显示空历史。macOS 首次启用告警时会请求通知权限，开发构建未签名时可能拿不到授权。
 
 ## 目录结构
 
@@ -39,6 +43,11 @@ internal/
     island.go               IslandService：窗口展开/隐藏/退出绑定
     music.go                MusicService：媒体快照、传输控制、事件推送
     agents.go               AgentsService：Claude/Codex 会话快照绑定
+    settings.go             SettingsService：告警开关与剪贴板暂停（持久化到 settings.json）
+  alerts/
+    alerts.go               阈值规则、冷却 / 迟滞状态与 Agent 状态迁移通知
+  prefs/
+    prefs.go                后端偏好设置（告警、剪贴板暂停、剪贴板快捷键）
   agents/
     monitor.go              发现近 24h 会话、匹配运行中的 CLI 进程、聚合快照
     claude.go               ~/.claude/projects 日志增量解析
@@ -52,11 +61,14 @@ internal/
   sysinfo/
     types.go                前后端共享的数据结构
     sampler.go              每秒采样、5 秒磁盘/进程、10 秒电池
+  clipboard/
+    history.go              历史、富文本与图片来源应用
+    watcher.go              轮询、暂停、隐藏内容 / 密码管理器过滤
 frontend/
   src/
-    App.tsx                 悬停展开、图钉、Esc 收起
-    components/             CollapsedBar / ExpandedPanel / MusicPanel / AgentsPanel / Ring / Sparkline
-    hooks/                  useSystemInfo / useSeries / useClock / useMusic / useAgentSessions
+    App.tsx                 悬停展开、图钉、Esc 收起、全局快捷键事件
+    components/             CollapsedBar / ExpandedPanel / MusicPanel / AgentsPanel / ClipboardPanel / Ring / Sparkline
+    hooks/                  useSystemInfo / useSeries / useClock / useMusic / useAgentSessions / useBackendSettings
     lib/format.ts           字节、速率、时长等格式化
   bindings/                 Wails 自动生成的 TypeScript 绑定（勿手改）
 build/                      各平台打包配置与图标

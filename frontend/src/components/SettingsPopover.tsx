@@ -1,3 +1,4 @@
+import type { Settings as BackendSettings } from "../../bindings/doter/internal/prefs/models";
 import {
   CARD_OPTIONS,
   defaultSettings,
@@ -8,11 +9,23 @@ import {
 interface SettingsPopoverProps {
   settings: Settings;
   onChange: (next: Settings) => void;
+  backendSettings: BackendSettings;
+  onSetAlertsEnabled: (enabled: boolean) => void;
+  onSetClipboardPaused: (paused: boolean) => void;
+  onSetClipboardHotkeyEnabled: (enabled: boolean) => void;
   onClose: () => void;
 }
 
 /** The settings popover opened from the header gear. */
-export function SettingsPopover({ settings, onChange, onClose }: SettingsPopoverProps) {
+export function SettingsPopover({
+  settings,
+  onChange,
+  backendSettings,
+  onSetAlertsEnabled,
+  onSetClipboardPaused,
+  onSetClipboardHotkeyEnabled,
+  onClose,
+}: SettingsPopoverProps) {
   const setCard = (key: CardKey, value: boolean) => {
     onChange({ ...settings, cards: { ...settings.cards, [key]: value } });
   };
@@ -50,6 +63,27 @@ export function SettingsPopover({ settings, onChange, onClose }: SettingsPopover
           onChange={(value) => setCard(option.key, value)}
         />
       ))}
+
+      <div className="settings-section">提醒与隐私</div>
+      <ToggleRow
+        label="桌面告警"
+        accent="var(--accent-warn)"
+        checked={backendSettings.alertsEnabled}
+        onChange={onSetAlertsEnabled}
+      />
+      <ToggleRow
+        label="暂停剪贴板记录"
+        accent="var(--accent-disk)"
+        checked={backendSettings.clipboardPaused}
+        onChange={onSetClipboardPaused}
+      />
+      <ToggleRow
+        label="剪贴板快捷键"
+        accent="var(--accent-net)"
+        checked={backendSettings.clipboardHotkeyEnabled}
+        onChange={onSetClipboardHotkeyEnabled}
+      />
+      <div className="settings-note">⌘/Ctrl + Shift + V 打开剪贴板</div>
 
       <div className="settings-foot">
         <span>更改即时生效</span>

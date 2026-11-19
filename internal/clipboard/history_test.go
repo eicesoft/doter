@@ -148,7 +148,7 @@ func TestHistoryImagePersistsAndDeletesFile(t *testing.T) {
 	h := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
 
 	png := []byte("\x89PNG\r\n\x1a\n fake bytes")
-	entry, ok := h.AddImage(png, "data:image/png;base64,AAAA", 64, 48)
+	entry, ok := h.AddImage(png, "data:image/png;base64,AAAA", 64, 48, "")
 	if !ok || entry.Kind != "image" {
 		t.Fatalf("image not stored: %+v ok=%v", entry, ok)
 	}
@@ -180,7 +180,7 @@ func TestHistoryImagePersistsAndDeletesFile(t *testing.T) {
 
 func TestHistoryClearRemovesImageFiles(t *testing.T) {
 	h := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
-	entry, _ := h.AddImage([]byte("image bytes"), "thumb", 1, 1)
+	entry, _ := h.AddImage([]byte("image bytes"), "thumb", 1, 1, "")
 	imgPath, _ := h.ImagePath(entry.ID)
 
 	h.Clear()
@@ -189,11 +189,23 @@ func TestHistoryClearRemovesImageFiles(t *testing.T) {
 	}
 }
 
+func TestHistoryPersistsSourceApp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "clipboard.json")
+	h := NewHistory(path)
+	if _, ok := h.AddRich("from safari", "text", nil, false, "Safari"); !ok {
+		t.Fatal("entry was not stored")
+	}
+	reloaded := NewHistory(path)
+	if got := reloaded.List(); len(got) != 1 || got[0].Source != "Safari" {
+		t.Fatalf("source not persisted: %+v", got)
+	}
+}
+
 func TestHistoryRichFormatsPersist(t *testing.T) {
 	h := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
 
 	blob := []byte("opaque pasteboard blob")
-	entry, ok := h.AddRich("styled text", "text", blob, true)
+	entry, ok := h.AddRich("styled text", "text", blob, true, "")
 	if !ok || !entry.Rich {
 		t.Fatalf("rich entry not stored: %+v ok=%v", entry, ok)
 	}

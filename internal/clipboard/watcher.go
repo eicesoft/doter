@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"image/png"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,6 +29,27 @@ type Watcher struct {
 	// state. It starts at -1 so the first poll captures whatever is
 	// already on the pasteboard.
 	lastSeen int64
+	paused   atomic.Bool
+}
+
+// appInfo describes the frontmost application at copy time.
+type appInfo struct {
+	ID   string
+	Name string
+}
+
+// excludedSources are apps whose pasteboard content is never recorded, as a
+// second line of defence for managers that do not set the standard macOS
+// concealed/transient markers.
+var excludedSources = map[string]bool{
+	"com.1password.1password":    true,
+	"com.agilebits.onepassword7": true,
+	"com.apple.keychainaccess":   true,
+	"com.apple.passwords":        true,
+	"com.bitwarden.desktop":      true,
+	"com.dashlane.dashlane":      true,
+	"com.lastpass.lastpass":      true,
+	"org.keepassxc.keepassxc":    true,
 }
 
 // NewWatcher creates a watcher over the given history.
@@ -41,6 +63,14 @@ func NewWatcher(history *History) *Watcher {
 
 // Updates yields an entry whenever the pasteboard changes.
 func (w *Watcher) Updates() <-chan Entry { return w.updates }
+
+// SetPaused controls whether new pasteboard content is recorded. The change
+// counter is still advanced while paused, so resuming does not immediately
+// capture whatever the user copied in the meantime.
+func (w *Watcher) SetPaused(paused bool) { w.paused.Store(paused) }
+
+// Paused reports whether capture is currently paused.
+func (w *Watcher) Paused() bool { return w.paused.Load() }
 
 // Start begins polling until ctx is cancelled.
 func (w *Watcher) Start(ctx context.Context) {
@@ -67,7 +97,15 @@ func (w *Watcher) poll() {
 	}
 	w.lastSeen = count
 
-	if entry, ok := w.captureImage(); ok {
+	if w.Paused() || isSensitive() {
+		return
+	}
+	source := frontmostApp()
+	if isExcludedSource(source) {
+		return
+	}
+
+	if entry, ok := w.captureImage(source.Name); ok {
 		w.emit(entry)
 		return
 	}
@@ -78,15 +116,21 @@ func (w *Watcher) poll() {
 	}
 
 	formats, rich, _ := readFormats()
-	entry, changed := w.history.AddRich(content, classify(content, hasURL()), formats, rich)
+	entry, changed := w.history.AddRich(content, classify(content, hasURL()), formats, rich, source.Name)
 	if !changed {
 		return
 	}
 	w.emit(entry)
 }
 
+// isExcludedSource reports whether the frontmost app is a password manager or
+// another app whose clipboard content must never be recorded.
+func isExcludedSource(source appInfo) bool {
+	return source.ID != "" && excludedSources[strings.ToLower(source.ID)]
+}
+
 // captureImage records the pasteboard image, if that is its primary content.
-func (w *Watcher) captureImage() (Entry, bool) {
+func (w *Watcher) captureImage(source string) (Entry, bool) {
 	if !imagePrimary() {
 		return Entry{}, false
 	}
@@ -107,6 +151,7 @@ func (w *Watcher) captureImage() (Entry, bool) {
 		"data:image/png;base64,"+base64.StdEncoding.EncodeToString(thumbnail),
 		cfg.Width,
 		cfg.Height,
+		source,
 	)
 }
 

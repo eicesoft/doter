@@ -48,4 +48,10 @@ export interface Entry {
      * and so paste back with their original formatting.
      */
     "rich"?: boolean;
+
+    /**
+     * Source is the friendly name of the app that copied the content, when the
+     * platform can report it.
+     */
+    "source"?: string;
 }

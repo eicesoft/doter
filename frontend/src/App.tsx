@@ -4,6 +4,8 @@ import { Events } from "@wailsio/runtime";
 import * as IslandService from "../bindings/doter/internal/services/islandservice";
 import { CollapsedBar } from "./components/CollapsedBar";
 import { ExpandedPanel } from "./components/ExpandedPanel";
+import type { TabId } from "./components/TabBar";
+import { useBackendSettings } from "./hooks/useBackendSettings";
 import { useClock } from "./hooks/useClock";
 import { useSeries } from "./hooks/useSeries";
 import { useSystemInfo } from "./hooks/useSystemInfo";
@@ -27,7 +29,9 @@ function App() {
   // native frost is on screen, so the panel never looks half-finished.
   const [glassOn, setGlassOn] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [settings, setSettings] = useState<Settings>(loadSettings);
+  const backend = useBackendSettings();
 
   // Preferences live in the webview: they only affect presentation, and the
   // dashboard must still come up if storage is unavailable.
@@ -161,6 +165,20 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [collapse]);
 
+  useEffect(() => {
+    // A global shortcut or a notification click asks the native side to
+    // reveal the island; this is the half that pins it and switches tabs.
+    const unsubscribe = Events.On("island:open-tab", (event) => {
+      const tab = event.data as TabId;
+      if (!tab) return;
+      setActiveTab(tab);
+      pinnedRef.current = true;
+      setPinned(true);
+      expand();
+    });
+    return () => unsubscribe();
+  }, [expand]);
+
   return (
     <div
       className="island"
@@ -185,8 +203,15 @@ function App() {
         pinned={pinned}
         onTogglePin={togglePin}
         onFocusIsland={focusIsland}
+        onDismiss={() => collapse(true)}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         settings={settings}
         onChangeSettings={setSettings}
+        backendSettings={backend.settings}
+        onSetAlertsEnabled={backend.setAlertsEnabled}
+        onSetClipboardPaused={backend.setClipboardPaused}
+        onSetClipboardHotkeyEnabled={backend.setClipboardHotkeyEnabled}
       />
     </div>
   );

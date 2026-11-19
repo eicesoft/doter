@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Entry } from "../../bindings/doter/internal/clipboard/models";
 import { useClipboard } from "../hooks/useClipboard";
@@ -15,13 +15,22 @@ const strokeProps = {
 
 interface ClipboardPanelProps {
   onFocusIsland: () => void;
+  paused: boolean;
+  onTogglePause: () => void;
+  onDismiss: () => void;
 }
 
 /** The clipboard history tab. */
-export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
+export function ClipboardPanel({
+  onFocusIsland,
+  paused,
+  onTogglePause,
+  onDismiss,
+}: ClipboardPanelProps) {
   const { entries, loading, search, setSearch, togglePin, remove, clear, copy } =
     useClipboard();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [cursor, setCursor] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -41,12 +50,78 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
     return () => window.clearInterval(id);
   }, []);
 
-  const handleCopy = async (id: string) => {
-    const ok = await copy(id);
-    if (!ok) return;
-    setCopiedId(id);
-    window.setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1_500);
-  };
+  const handleCopy = useCallback(
+    async (id: string) => {
+      const ok = await copy(id);
+      if (!ok) return false;
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1_500);
+      return true;
+    },
+    [copy],
+  );
+
+  // A new copy or a different filter starts at the top of the list.
+  useEffect(() => {
+    setCursor(0);
+  }, [entries, search]);
+
+  useEffect(() => {
+    setCursor((current) => Math.min(current, Math.max(filtered.length - 1, 0)));
+  }, [filtered.length]);
+
+  // Keep the keyboard selection visible.
+  useEffect(() => {
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-clip-index="${cursor}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+  }, [cursor, filtered.length]);
+
+  // Keyboard-first use is the point of the global shortcut: arrows move,
+  // Enter pastes and collapses, and Cmd/Ctrl+1…9 picks a row directly.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "BUTTON" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (filtered.length === 0) return;
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        setCursor((current) => {
+          const next = event.key === "ArrowDown" ? current + 1 : current - 1;
+          return Math.max(0, Math.min(next, filtered.length - 1));
+        });
+        return;
+      }
+
+      const pick = (index: number) => {
+        const entry = filtered[index];
+        if (!entry) return;
+        event.preventDefault();
+        void handleCopy(entry.id).then((ok) => {
+          if (ok) onDismiss();
+        });
+      };
+
+      if (event.key === "Enter") {
+        pick(cursor);
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key)) {
+        pick(Number(event.key) - 1);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [filtered, cursor, handleCopy, onDismiss]);
 
   const handleListScroll = () => {
     const el = listRef.current;
@@ -94,6 +169,15 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
         </div>
         <button
           type="button"
+          className={paused ? "clipboard-clear is-active" : "clipboard-clear"}
+          onClick={onTogglePause}
+          aria-pressed={paused}
+          title={paused ? "继续记录剪贴板" : "暂停记录剪贴板"}
+        >
+          {paused ? "继续" : "暂停"}
+        </button>
+        <button
+          type="button"
           className="clipboard-clear"
           onClick={clear}
           disabled={entries.length === 0}
@@ -101,6 +185,15 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
           清空
         </button>
       </div>
+
+      {paused && (
+        <div className="clipboard-paused" role="status">
+          <span>剪贴板记录已暂停，复制的新内容不会保存。</span>
+          <button type="button" onClick={onTogglePause}>
+            继续记录
+          </button>
+        </div>
+      )}
 
       <div className="clipboard-list" ref={listRef} onScroll={handleListScroll}>
         {loading ? (
@@ -121,10 +214,12 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
             </div>
           </div>
         ) : (
-          filtered.map((entry) => (
+          filtered.map((entry, index) => (
             <ClipboardRow
               key={entry.id}
               entry={entry}
+              index={index}
+              active={index === cursor}
               copied={copiedId === entry.id}
               onCopy={() => void handleCopy(entry.id)}
               onPin={() => togglePin(entry.id)}
@@ -154,19 +249,32 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
 
 interface ClipboardRowProps {
   entry: Entry;
+  index: number;
+  active: boolean;
   copied: boolean;
   onCopy: () => void;
   onPin: () => void;
   onRemove: () => void;
 }
 
-function ClipboardRow({ entry, copied, onCopy, onPin, onRemove }: ClipboardRowProps) {
+function ClipboardRow({
+  entry,
+  index,
+  active,
+  copied,
+  onCopy,
+  onPin,
+  onRemove,
+}: ClipboardRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isImage = entry.kind === "image";
   const long = !isImage && entry.content.length > 120;
+  const className = ["clip-row", entry.pinned ? "is-pinned" : "", active ? "is-active" : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className={entry.pinned ? "clip-row is-pinned" : "clip-row"}>
+    <div className={className} data-clip-index={index}>
       <button
         type="button"
         className="clip-main"
@@ -209,6 +317,11 @@ function ClipboardRow({ entry, copied, onCopy, onPin, onRemove }: ClipboardRowPr
                   <span>{formatBytes(entry.contentLen)}</span>
                   <span>PNG</span>
                   <span>{formatRelTime(entry.createdAt)}</span>
+                  {entry.source && (
+                    <span className="clip-source" title={entry.source}>
+                      {entry.source}
+                    </span>
+                  )}
                 </span>
               </span>
             </>
@@ -219,6 +332,11 @@ function ClipboardRow({ entry, copied, onCopy, onPin, onRemove }: ClipboardRowPr
               </span>
               <span className="clip-meta">
                 <span>{formatRelTime(entry.createdAt)}</span>
+                {entry.source && (
+                  <span className="clip-source" title={entry.source}>
+                    {entry.source}
+                  </span>
+                )}
                 {entry.rich && <span className="clip-rich">富文本</span>}
                 {entry.contentLen > entry.content.length && (
                   <span className="clip-truncated">{entry.contentLen} 字节</span>

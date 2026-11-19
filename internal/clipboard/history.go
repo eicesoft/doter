@@ -46,6 +46,9 @@ type Entry struct {
 	// Rich marks entries that kept styled representations (RTF, HTML, …)
 	// and so paste back with their original formatting.
 	Rich bool `json:"rich,omitempty"`
+	// Source is the friendly name of the app that copied the content, when the
+	// platform can report it.
+	Source string `json:"source,omitempty"`
 }
 
 // storedEntry is the on-disk shape. The full content is kept so a restart
@@ -103,13 +106,13 @@ func (h *History) List() []Entry {
 // Add records a new clipboard value. It reports whether the history changed;
 // a repeat of the current top entry only bumps that entry to the top.
 func (h *History) Add(content string, kind string) (Entry, bool) {
-	return h.AddRich(content, kind, nil, false)
+	return h.AddRich(content, kind, nil, false, "")
 }
 
 // AddRich records a clipboard value along with the pasteboard's extra
 // representations (RTF, HTML, …), which a write-back restores as-is so the
 // content pastes into Word, Excel and browsers with its original styling.
-func (h *History) AddRich(content, kind string, formats []byte, rich bool) (Entry, bool) {
+func (h *History) AddRich(content, kind string, formats []byte, rich bool, source string) (Entry, bool) {
 	if content == "" {
 		return Entry{}, false
 	}
@@ -125,6 +128,7 @@ func (h *History) AddRich(content, kind string, formats []byte, rich bool) (Entr
 			CreatedAt:  time.Now().UnixMilli(),
 			ContentLen: len(content),
 			Rich:       rich,
+			Source:     source,
 		},
 		Full:    content,
 		Formats: formats,
@@ -133,7 +137,7 @@ func (h *History) AddRich(content, kind string, formats []byte, rich bool) (Entr
 
 // AddImage records a copied image. The PNG is written to the image directory
 // and only its thumbnail (a data URL) is shipped to the frontend.
-func (h *History) AddImage(png []byte, thumbnail string, width, height int) (Entry, bool) {
+func (h *History) AddImage(png []byte, thumbnail string, width, height int, source string) (Entry, bool) {
 	if len(png) == 0 {
 		return Entry{}, false
 	}
@@ -163,6 +167,7 @@ func (h *History) AddImage(png []byte, thumbnail string, width, height int) (Ent
 			ContentLen: len(png),
 			Width:      width,
 			Height:     height,
+			Source:     source,
 		},
 		ImagePath: path,
 	}), true
@@ -176,8 +181,12 @@ func (h *History) insertLocked(entry storedEntry) Entry {
 			continue
 		}
 		// Same content copied again: refresh its timestamp and move it to
-		// the top, which is how every clipboard manager behaves.
+		// the top, which is how every clipboard manager behaves. Keep the
+		// newest source app when the platform reports one.
 		e.CreatedAt = time.Now().UnixMilli()
+		if entry.Source != "" {
+			e.Source = entry.Source
+		}
 		h.entries = append(h.entries[:i], h.entries[i+1:]...)
 		h.entries = append([]storedEntry{e}, h.entries...)
 		h.trimLocked()

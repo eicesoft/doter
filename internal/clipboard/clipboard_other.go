@@ -18,6 +18,16 @@ func hasURL() bool {
 	return false
 }
 
+// isSensitive reports whether the pasteboard is marked as concealed.
+func isSensitive() bool {
+	return false
+}
+
+// frontmostApp returns the app that most likely performed the copy.
+func frontmostApp() appInfo {
+	return appInfo{}
+}
+
 // imagePrimary reports whether the pasteboard's primary content is an image.
 func imagePrimary() bool {
 	return false

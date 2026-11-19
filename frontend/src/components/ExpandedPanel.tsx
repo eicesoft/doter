@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import type { Settings as BackendSettings } from "../../bindings/doter/internal/prefs/models";
 import type { Snapshot, StaticInfo } from "../../bindings/doter/internal/sysinfo/models";
 import { CARD_KEYS, type Settings } from "../lib/settings";
 import {
@@ -32,8 +33,15 @@ interface ExpandedPanelProps {
   pinned: boolean;
   onTogglePin: () => void;
   onFocusIsland: () => void;
+  onDismiss: () => void;
+  activeTab: TabId;
+  onSelectTab: (id: TabId) => void;
   settings: Settings;
   onChangeSettings: (next: Settings) => void;
+  backendSettings: BackendSettings;
+  onSetAlertsEnabled: (enabled: boolean) => void;
+  onSetClipboardPaused: (paused: boolean) => void;
+  onSetClipboardHotkeyEnabled: (enabled: boolean) => void;
 }
 
 interface CardProps {
@@ -81,10 +89,16 @@ export function ExpandedPanel({
   pinned,
   onTogglePin,
   onFocusIsland,
+  onDismiss,
+  activeTab,
+  onSelectTab,
   settings,
   onChangeSettings,
+  backendSettings,
+  onSetAlertsEnabled,
+  onSetClipboardPaused,
+  onSetClipboardHotkeyEnabled,
 }: ExpandedPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
 
@@ -204,6 +218,10 @@ export function ExpandedPanel({
               <SettingsPopover
                 settings={settings}
                 onChange={onChangeSettings}
+                backendSettings={backendSettings}
+                onSetAlertsEnabled={onSetAlertsEnabled}
+                onSetClipboardPaused={onSetClipboardPaused}
+                onSetClipboardHotkeyEnabled={onSetClipboardHotkeyEnabled}
                 onClose={() => setSettingsOpen(false)}
               />
             )}
@@ -436,12 +454,17 @@ export function ExpandedPanel({
 
         {activeTab === "clipboard" && (
           <Card label="Clipboard" accent="var(--accent-disk)" wide>
-            <ClipboardPanel onFocusIsland={onFocusIsland} />
+            <ClipboardPanel
+              onFocusIsland={onFocusIsland}
+              paused={backendSettings.clipboardPaused}
+              onTogglePause={() => onSetClipboardPaused(!backendSettings.clipboardPaused)}
+              onDismiss={onDismiss}
+            />
           </Card>
         )}
       </div>
 
-      <TabBar active={activeTab} onSelect={setActiveTab} onFocusIsland={onFocusIsland} />
+      <TabBar active={activeTab} onSelect={onSelectTab} onFocusIsland={onFocusIsland} />
     </div>
   );
 }

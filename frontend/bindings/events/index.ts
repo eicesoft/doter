@@ -14,9 +14,19 @@ import "../github.com/wailsapp/wails/v3/internal/eventcreate.js";
 export const AgentsUpdate = "agents:update";
 
 /**
+ * Name of the custom event "alerts:update".
+ */
+export const AlertsUpdate = "alerts:update";
+
+/**
  * Name of the custom event "clipboard:update".
  */
 export const ClipboardUpdate = "clipboard:update";
+
+/**
+ * Name of the custom event "island:open-tab".
+ */
+export const IslandOpenTab = "island:open-tab";
 
 /**
  * Name of the custom event "sysinfo:update".

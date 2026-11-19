@@ -10,6 +10,9 @@ import type { Events } from "@wailsio/runtime";
 import type * as agents$0 from "../../../../../doter/internal/agents/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import type * as alerts$0 from "../../../../../doter/internal/alerts/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import type * as clipboard$0 from "../../../../../doter/internal/clipboard/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -19,7 +22,9 @@ declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
             "agents:update": agents$0.Snapshot;
+            "alerts:update": alerts$0.Alert;
             "clipboard:update": clipboard$0.Entry;
+            "island:open-tab": string;
             "sysinfo:update": sysinfo$0.Snapshot;
         }
     }
