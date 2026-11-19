@@ -16,6 +16,9 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
+// topProcesses bounds how many rows each ranking contributes to a snapshot.
+const topProcesses = 20
+
 // Sampler periodically reads system metrics on a single background goroutine.
 // Consumers read the latest snapshot through Current or receive copies on the
 // Updates channel.
@@ -360,16 +363,61 @@ func collectProcesses(prev map[int32]procCounters, now time.Time, totalMem uint6
 		result = append(result, stat)
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		if result[i].CPUPercent == result[j].CPUPercent {
-			return result[i].MemoryRSS > result[j].MemoryRSS
+	byCPU := append([]ProcessStats(nil), result...)
+	sort.Slice(byCPU, func(i, j int) bool {
+		if byCPU[i].CPUPercent == byCPU[j].CPUPercent {
+			return byCPU[i].MemoryRSS > byCPU[j].MemoryRSS
 		}
-		return result[i].CPUPercent > result[j].CPUPercent
+		return byCPU[i].CPUPercent > byCPU[j].CPUPercent
 	})
-	if len(result) > 5 {
-		result = result[:5]
+	byMem := append([]ProcessStats(nil), result...)
+	sort.Slice(byMem, func(i, j int) bool {
+		if byMem[i].MemoryRSS == byMem[j].MemoryRSS {
+			return byMem[i].CPUPercent > byMem[j].CPUPercent
+		}
+		return byMem[i].MemoryRSS > byMem[j].MemoryRSS
+	})
+
+	// The UI can sort by either metric, so ship the union of both top lists.
+	// A process that is only hot on memory must still be reachable when the
+	// panel ranks by memory.
+	merged := make([]ProcessStats, 0, 2*topProcesses)
+	seen := make(map[int32]struct{}, 2*topProcesses)
+	for _, list := range [][]ProcessStats{byCPU, byMem} {
+		if len(list) > topProcesses {
+			list = list[:topProcesses]
+		}
+		for _, p := range list {
+			if _, ok := seen[p.PID]; ok {
+				continue
+			}
+			seen[p.PID] = struct{}{}
+			merged = append(merged, p)
+		}
 	}
-	return result, next
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].CPUPercent == merged[j].CPUPercent {
+			return merged[i].MemoryRSS > merged[j].MemoryRSS
+		}
+		return merged[i].CPUPercent > merged[j].CPUPercent
+	})
+
+	// Only the rows that reach the UI need the executable path and start
+	// time; querying those for every process would make the 5-second sample
+	// noticeably more expensive.
+	for i := range merged {
+		p, err := process.NewProcess(merged[i].PID)
+		if err != nil {
+			continue
+		}
+		if exe, err := p.Exe(); err == nil {
+			merged[i].Exe = exe
+		}
+		if created, err := p.CreateTime(); err == nil {
+			merged[i].CreateTime = created
+		}
+	}
+	return merged, next
 }
 
 func isLoopback(name string) bool {

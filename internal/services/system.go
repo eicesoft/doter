@@ -27,3 +27,18 @@ func (s *SystemService) GetSnapshot() sysinfo.Snapshot {
 func (s *SystemService) GetStaticInfo() sysinfo.StaticInfo {
 	return s.sampler.Static()
 }
+
+// SearchProcesses matches every running process by name or executable path.
+func (s *SystemService) SearchProcesses(query string) []sysinfo.ProcessStats {
+	return s.sampler.SearchProcesses(query, 30)
+}
+
+// KillProcess terminates a process after verifying its start time.
+func (s *SystemService) KillProcess(pid int32, createTime int64) error {
+	return sysinfo.KillProcess(pid, createTime)
+}
+
+// RevealProcess opens the file manager at the process executable.
+func (s *SystemService) RevealProcess(pid int32, createTime int64) bool {
+	return sysinfo.RevealProcess(pid, createTime)
+}

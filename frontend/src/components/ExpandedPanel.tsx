@@ -1,11 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { Settings as BackendSettings } from "../../bindings/doter/internal/prefs/models";
-import type { Snapshot, StaticInfo } from "../../bindings/doter/internal/sysinfo/models";
+import type { ProcessStats, Snapshot, StaticInfo } from "../../bindings/doter/internal/sysinfo/models";
+import {
+  KillProcess,
+  RevealProcess,
+  SearchProcesses,
+} from "../../bindings/doter/internal/services/systemservice";
 import { CARD_KEYS, type Settings } from "../lib/settings";
 import {
   formatBytes,
+  formatBytesCompact,
   formatClock,
   formatDate,
   formatDuration,
@@ -49,6 +55,8 @@ interface ExpandedPanelProps {
 interface CardProps {
   label: string;
   hint?: string;
+  /** Interactive controls rendered at the card's top-right corner. */
+  actions?: ReactNode;
   accent: string;
   wide?: boolean;
   /** Settings can switch a card off without unmounting its siblings. */
@@ -56,7 +64,7 @@ interface CardProps {
   children: ReactNode;
 }
 
-function Card({ label, hint, accent, wide, hidden, children }: CardProps) {
+function Card({ label, hint, actions, accent, wide, hidden, children }: CardProps) {
   if (hidden) return null;
   return (
     <section
@@ -65,7 +73,11 @@ function Card({ label, hint, accent, wide, hidden, children }: CardProps) {
     >
       <div className="card-head">
         <span className="card-label">{label}</span>
-        {hint && <span className="card-hint">{hint}</span>}
+        {actions ? (
+          <div className="card-actions">{actions}</div>
+        ) : (
+          hint && <span className="card-hint">{hint}</span>
+        )}
       </div>
       <div className="card-body">{children}</div>
     </section>
@@ -103,6 +115,11 @@ export function ExpandedPanel({
   onSetAutostart,
   onSetHideOnFullscreen,
 }: ExpandedPanelProps) {
+  const [procSort, setProcSort] = useState<"cpu" | "mem">("cpu");
+  const [procQuery, setProcQuery] = useState("");
+  const [procHits, setProcHits] = useState<ProcessStats[] | null>(null);
+  const [confirmKill, setConfirmKill] = useState<number | null>(null);
+  const [procError, setProcError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
 
@@ -115,6 +132,73 @@ export function ExpandedPanel({
   const battery = snapshot?.battery;
   const load = snapshot?.load;
   const processes = snapshot?.processes ?? [];
+
+  // Search returns every matching process; without a query the panel only has
+  // the union of the top CPU and top memory rows.
+  useEffect(() => {
+    const query = procQuery.trim();
+    setConfirmKill(null);
+    setProcError("");
+    if (!query) {
+      setProcHits(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      SearchProcesses(query)
+        .then((hits) => {
+          if (!cancelled) setProcHits(hits ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setProcHits([]);
+        });
+    }, 220);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [procQuery]);
+
+  const searching = procHits !== null;
+  const procRows = useMemo(() => {
+    const ranked = [...(procHits ?? processes)];
+    ranked.sort((a, b) => {
+      if (procSort === "cpu") {
+        return b.cpuPercent - a.cpuPercent || b.memoryRSS - a.memoryRSS;
+      }
+      return b.memoryRSS - a.memoryRSS || b.cpuPercent - a.cpuPercent;
+    });
+    return ranked.slice(0, searching ? 30 : 20);
+  }, [processes, procHits, procSort, searching]);
+
+  const killProcess = (process: ProcessStats) => {
+    setProcError("");
+    KillProcess(process.pid, process.createTime ?? 0)
+      .then(() => {
+        setConfirmKill(null);
+        if (procHits) {
+          setProcHits((hits) => hits?.filter((hit) => hit.pid !== process.pid) ?? null);
+        }
+      })
+      .catch((error: unknown) => {
+        setProcError(
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : "无法结束进程",
+        );
+      });
+  };
+
+  const revealProcess = (process: ProcessStats) => {
+    setProcError("");
+    RevealProcess(process.pid, process.createTime ?? 0)
+      .then((ok) => {
+        if (!ok) setProcError("找不到该进程的可执行文件");
+      })
+      .catch(() => setProcError("无法打开文件管理器"));
+  };
 
   const hostname = staticInfo?.hostname || "localhost";
   const platform = staticInfo
@@ -393,23 +477,140 @@ export function ExpandedPanel({
 
             <Card
               label="Top processes"
-              hint="CPU · MEM"
               accent="var(--accent-cpu)"
               wide
               hidden={!settings.cards.processes}
+              actions={
+                <div className="proc-sort" role="group" aria-label="进程排序">
+                  <button
+                    type="button"
+                    className={procSort === "cpu" ? "proc-sort-btn is-active" : "proc-sort-btn"}
+                    data-sort="cpu"
+                    aria-pressed={procSort === "cpu"}
+                    onClick={() => setProcSort("cpu")}
+                  >
+                    CPU
+                  </button>
+                  <span className="proc-sort-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    className={procSort === "mem" ? "proc-sort-btn is-active" : "proc-sort-btn"}
+                    data-sort="mem"
+                    aria-pressed={procSort === "mem"}
+                    onClick={() => setProcSort("mem")}
+                  >
+                    MEM
+                  </button>
+                </div>
+              }
             >
+              <div className="proc-search">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                >
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="M16 16l4.5 4.5" />
+                </svg>
+                <input
+                  type="text"
+                  value={procQuery}
+                  placeholder="搜索进程名或路径"
+                  onPointerEnter={onFocusIsland}
+                  onPointerDown={onFocusIsland}
+                  onChange={(event) => setProcQuery(event.target.value)}
+                />
+                {procQuery && (
+                  <button
+                    type="button"
+                    className="proc-search-clear"
+                    onClick={() => setProcQuery("")}
+                    aria-label="清除搜索"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {procError && <div className="proc-error">{procError}</div>}
+
               <div className="proc-table">
-                {processes.length === 0 ? (
-                  <div className="empty-state">Collecting process data…</div>
+                {procRows.length === 0 ? (
+                  <div className="empty-state">
+                    {searching ? "没有匹配的进程" : "Collecting process data…"}
+                  </div>
                 ) : (
-                  processes.map((process) => (
+                  procRows.map((process) => (
                     <div className="proc-row" key={process.pid}>
-                      <span className="proc-name" title={process.name}>
+                      <span className="proc-pid">{process.pid}</span>
+                      <span className="proc-name" title={process.exe || process.name}>
                         {process.name}
                       </span>
-                      <span className="proc-pid">{process.pid}</span>
-                      <span className="proc-cpu">{formatPercent(process.cpuPercent, 1)}</span>
-                      <span className="proc-mem">{formatPercent(process.memoryPercent, 1)}</span>
+                      <span
+                        className={
+                          procSort === "cpu" ? "proc-cpu is-ranked" : "proc-cpu"
+                        }
+                      >
+                        {searching ? "—" : formatPercent(process.cpuPercent, 1)}
+                      </span>
+                      <span
+                        className={
+                          procSort === "mem" ? "proc-mem is-ranked" : "proc-mem"
+                        }
+                      >
+                        {formatBytesCompact(process.memoryRSS)}
+                      </span>
+                      <span className="proc-actions">
+                        {confirmKill === process.pid ? (
+                          <>
+                            <button
+                              type="button"
+                              className="proc-action is-danger"
+                              onClick={() => killProcess(process)}
+                              title="确认结束进程"
+                              aria-label={`确认结束 ${process.name}`}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              type="button"
+                              className="proc-action"
+                              onClick={() => setConfirmKill(null)}
+                              title="取消"
+                              aria-label="取消结束进程"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="proc-action"
+                              onClick={() => revealProcess(process)}
+                              disabled={!process.exe}
+                              title="在文件管理器中显示"
+                              aria-label={`显示 ${process.name} 的位置`}
+                            >
+                              ↗
+                            </button>
+                            <button
+                              type="button"
+                              className="proc-action is-danger"
+                              onClick={() => setConfirmKill(process.pid)}
+                              title="结束进程"
+                              aria-label={`结束 ${process.name}`}
+                            >
+                              ×
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </div>
                   ))
                 )}

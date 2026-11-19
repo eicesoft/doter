@@ -16,22 +16,27 @@ export function formatSpeed(bytesPerSecond: number): string {
   return `${formatBytes(bytesPerSecond)}/s`;
 }
 
-/** Ultra-compact rate used inside the collapsed pill: 1.2M, 240K. */
-export function formatRateCompact(bytesPerSecond: number): string {
-  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "0";
+/** Ultra-compact byte count: 1.2M, 240K, 1.2G. */
+export function formatBytesCompact(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0";
   const kb = 1024;
   const mb = kb * 1024;
   const gb = mb * 1024;
-  if (bytesPerSecond < kb) return `${Math.round(bytesPerSecond)}B`;
-  if (bytesPerSecond < mb) {
-    const value = bytesPerSecond / kb;
+  if (bytes < kb) return `${Math.round(bytes)}B`;
+  if (bytes < mb) {
+    const value = bytes / kb;
     return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)}K`;
   }
-  if (bytesPerSecond < gb) {
-    const value = bytesPerSecond / mb;
+  if (bytes < gb) {
+    const value = bytes / mb;
     return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)}M`;
   }
-  return `${(bytesPerSecond / gb).toFixed(1)}G`;
+  return `${(bytes / gb).toFixed(1)}G`;
+}
+
+/** Ultra-compact rate used inside the collapsed pill: 1.2M, 240K. */
+export function formatRateCompact(bytesPerSecond: number): string {
+  return formatBytesCompact(bytesPerSecond);
 }
 
 export function formatPercent(value: number, digits = 0): string {

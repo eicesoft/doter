@@ -90,4 +90,9 @@ type ProcessStats struct {
 	CPUPercent    float64 `json:"cpuPercent"`
 	MemoryPercent float64 `json:"memoryPercent"`
 	MemoryRSS     uint64  `json:"memoryRSS"`
+	// Exe is the executable path, used for revealing and for search by path.
+	Exe string `json:"exe,omitempty"`
+	// CreateTime is the process start time in Unix milliseconds. It guards
+	// kill/reveal against PID reuse.
+	CreateTime int64 `json:"createTime,omitempty"`
 }

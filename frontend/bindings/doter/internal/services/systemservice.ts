@@ -28,3 +28,24 @@ export function GetSnapshot(): $CancellablePromise<sysinfo$0.Snapshot> {
 export function GetStaticInfo(): $CancellablePromise<sysinfo$0.StaticInfo> {
     return $Call.ByID(4000327640);
 }
+
+/**
+ * KillProcess terminates a process after verifying its start time.
+ */
+export function KillProcess(pid: number, createTime: number): $CancellablePromise<void> {
+    return $Call.ByID(4108662707, pid, createTime);
+}
+
+/**
+ * RevealProcess opens the file manager at the process executable.
+ */
+export function RevealProcess(pid: number, createTime: number): $CancellablePromise<boolean> {
+    return $Call.ByID(305249500, pid, createTime);
+}
+
+/**
+ * SearchProcesses matches every running process by name or executable path.
+ */
+export function SearchProcesses(query: string): $CancellablePromise<sysinfo$0.ProcessStats[] | null> {
+    return $Call.ByID(684991767, query);
+}

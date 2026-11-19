@@ -62,6 +62,17 @@ export interface ProcessStats {
     "cpuPercent": number;
     "memoryPercent": number;
     "memoryRSS": number;
+
+    /**
+     * Exe is the executable path, used for revealing and for search by path.
+     */
+    "exe"?: string;
+
+    /**
+     * CreateTime is the process start time in Unix milliseconds. It guards
+     * kill/reveal against PID reuse.
+     */
+    "createTime"?: number;
 }
 
 /**

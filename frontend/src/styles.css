@@ -256,7 +256,7 @@ body {
   min-width: 20px;
 }
 
-.memory-dot {
+.stat-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -2271,6 +2271,12 @@ body {
   color: var(--dim);
 }
 
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .card-body {
   position: relative;
   z-index: 1;
@@ -2534,23 +2540,197 @@ body {
 }
 
 .proc-table {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  /* Twenty rows do not fit the bottom card; scroll instead of shrinking. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.proc-table::-webkit-scrollbar {
+  width: 5px;
+}
+
+.proc-table::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.proc-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.proc-search:focus-within {
+  border-color: rgba(53, 208, 127, 0.36);
+  background: rgba(255, 255, 255, 0.052);
+}
+
+.proc-search svg {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  color: var(--dim);
+}
+
+.proc-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.proc-search input::placeholder {
+  color: var(--dim);
+}
+
+.proc-search-clear {
+  flex: none;
+  border: 0;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.proc-search-clear:hover {
+  color: var(--text);
+}
+
+.proc-error {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--accent-danger);
+  font-size: 9px;
+}
+
+.proc-sort {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.proc-sort-btn {
+  padding: 1px 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.proc-sort-btn:hover {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* The active metric owns its accent: green for CPU, blue for memory. */
+.proc-sort-btn.is-active[data-sort="cpu"] {
+  color: var(--accent-cpu);
+  background: color-mix(in srgb, var(--accent-cpu) 16%, transparent);
+}
+
+.proc-sort-btn.is-active[data-sort="mem"] {
+  color: var(--accent-mem);
+  background: color-mix(in srgb, var(--accent-mem) 16%, transparent);
+}
+
+.proc-sort-sep {
+  font-size: 8.5px;
+  color: var(--dim);
 }
 
 .proc-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px 62px 62px;
+  grid-template-columns: 46px minmax(0, 1fr) 56px 56px 46px;
   align-items: center;
-  gap: 6px;
+  column-gap: 4px;
   padding: 3px 6px;
   border-radius: 7px;
   font-size: 10.5px;
 }
 
-.proc-row:hover {
+.proc-row:hover,
+.proc-row:focus-within {
   background: rgba(255, 255, 255, 0.04);
+}
+
+.proc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.proc-row:hover .proc-actions,
+.proc-row:focus-within .proc-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .proc-actions {
+    opacity: 1;
+  }
+}
+
+.proc-action {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.proc-action:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.proc-action.is-danger:hover:not(:disabled) {
+  color: var(--accent-danger);
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.proc-action:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 .proc-name {
@@ -2568,6 +2748,11 @@ body {
 
 .proc-cpu {
   text-align: right;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.proc-cpu.is-ranked {
   font-weight: 650;
   color: var(--accent-cpu);
 }
@@ -2575,6 +2760,11 @@ body {
 .proc-mem {
   text-align: right;
   color: var(--muted);
+}
+
+.proc-mem.is-ranked {
+  font-weight: 650;
+  color: var(--accent-mem);
 }
 
 .card-wide .empty-state {
