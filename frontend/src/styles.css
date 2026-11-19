@@ -28,6 +28,9 @@
   --island-shoulder: 6px;
   --island-shoulder-fill: #0b0d12;
 
+  /* Frosted grain used by the glass surfaces. */
+  --frost-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.09'/%3E%3C/svg%3E");
+
   font-family:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -75,6 +78,9 @@ body {
      native 660x520 window minus its 20x14 inset. */
   width: var(--island-idle-width, 188px);
   height: var(--island-idle-height, 30px);
+  /* The image layers are shared by both states, so only the backing colour
+     animates: opaque while idle, fading away as the island unfolds so the
+     frosted glass underneath fades in. */
   background:
     /* Hairline along the top edge (was drawn by ::before, now used by the
        shoulders). */
@@ -85,7 +91,14 @@ body {
         transparent
       )
       center top / 76% 1px no-repeat,
-    radial-gradient(120% 150% at 50% 0%, #11141b 0%, #090b10 52%, #050608 100%);
+    var(--frost-grain),
+    radial-gradient(
+        120% 150% at 50% 0%,
+        rgba(21, 25, 34, 0.8) 0%,
+        rgba(11, 13, 19, 0.76) 52%,
+        rgba(6, 7, 11, 0.74) 100%
+      )
+      #050608;
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-top: 0;
   border-radius: 0 0 var(--island-radius-collapsed) var(--island-radius-collapsed);
@@ -93,13 +106,42 @@ body {
   transition:
     width 420ms cubic-bezier(0.22, 1, 0.36, 1),
     height 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-radius 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    border-radius 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .island[data-open="true"] {
   width: 640px;
-  height: 506px;
+  height: 546px;
   border-radius: 0 0 var(--island-radius-expanded) var(--island-radius-expanded);
+  /* Frosted glass: the window is transparent, so the blur samples whatever is
+     behind the panel and the dark gradient only tints it. The grain layer keeps
+     the frosted look where the compositor cannot sample behind the window. */
+  background:
+    linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.18),
+        transparent
+      )
+      center top / 76% 1px no-repeat,
+    var(--frost-grain),
+    radial-gradient(
+        120% 150% at 50% 0%,
+        rgba(21, 25, 34, 0.8) 0%,
+        rgba(11, 13, 19, 0.76) 52%,
+        rgba(6, 7, 11, 0.74) 100%
+      )
+      rgba(5, 6, 8, 0);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+}
+
+/* The shoulders sit outside the island, so they get their own tint instead of
+   inheriting the frosted background. */
+.island[data-open="true"]::before,
+.island[data-open="true"]::after {
+  background-color: rgba(11, 13, 19, 0.83);
 }
 
 /* Inverted top corners. Each shoulder is the square just outside the island's
@@ -114,7 +156,10 @@ body {
   top: 0;
   width: var(--island-shoulder);
   height: var(--island-shoulder);
-  background: var(--island-shoulder-fill);
+  background-color: var(--island-shoulder-fill);
+  /* Fades from opaque while idle to the glass tint when opening, in step with
+     the body. */
+  transition: background-color 420ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 }
 
@@ -364,9 +409,651 @@ body {
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: 128px 128px minmax(0, 1fr);
+  grid-template-rows: 120px 120px minmax(0, 1fr);
   gap: 10px;
-  padding: 12px 14px 14px;
+  padding: 12px 14px 6px;
+  animation: panel-body-in 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Remounted on every tab switch, so this replays each time. */
+@keyframes panel-body-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The overview fills the grid with seven cards; the placeholder tabs hold a
+   single full-width card. */
+.panel-body[data-tab="music"],
+.panel-body[data-tab="clipboard"],
+.panel-body[data-tab="weather"] {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.panel-body[data-tab="music"] .card-body {
+  justify-content: center;
+}
+
+/* --- Clipboard panel ----------------------------------------------------- */
+
+.panel-body[data-tab="clipboard"] .card-body {
+  justify-content: stretch;
+  overflow: hidden;
+}
+
+/* --- Weather panel ------------------------------------------------------- */
+
+.panel-body[data-tab="weather"] .card-body {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.weather-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Scope beats the plain .clipboard-search rule further down, whose flex: 1
+   would otherwise stretch the search box in this column layout. */
+.weather-panel .weather-search {
+  flex: none;
+}
+
+.weather-panel .empty-state {
+  margin-top: 12px;
+}
+
+.weather-results {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.weather-result {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.weather-result:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+.weather-result b {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.weather-result span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.weather-now {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 14px;
+  padding: 2px 4px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.weather-now .wx-icon {
+  grid-row: span 2;
+  color: var(--accent-net);
+}
+
+.weather-temperature {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 34px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.weather-temperature span {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.weather-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 10.5px;
+  color: #cfd4de;
+}
+
+.weather-place {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.weather-refreshing {
+  color: var(--dim);
+}
+
+.weather-days {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.weather-day {
+  display: grid;
+  grid-template-columns: 52px 22px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 10.5px;
+}
+
+.weather-day:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.weather-day-name {
+  color: var(--muted);
+}
+
+.weather-day .wx-icon {
+  color: var(--accent-net);
+}
+
+.weather-day-desc {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.weather-day-temp {
+  font-weight: 650;
+}
+
+.weather-day-temp em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.weather-day-rain {
+  min-width: 48px;
+  text-align: right;
+  color: var(--accent-net);
+}
+
+.clipboard-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clipboard-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clipboard-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.clipboard-search:focus-within {
+  border-color: rgba(167, 139, 250, 0.4);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.clipboard-search svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--dim);
+}
+
+.clipboard-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  /* The panel disables text selection globally; an input needs it back. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.clipboard-search input::placeholder {
+  color: var(--dim);
+}
+
+.clipboard-search-clear {
+  flex: none;
+  border: 0;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.clipboard-search-clear:hover {
+  color: var(--text);
+}
+
+.clipboard-clear {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    opacity 160ms ease;
+}
+
+.clipboard-clear:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.clipboard-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.clipboard-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.clipboard-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.clipboard-list::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.clip-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 5px 4px 7px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.clip-row:hover {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.clip-row.is-pinned {
+  background: rgba(167, 139, 250, 0.09);
+  border-color: rgba(167, 139, 250, 0.22);
+}
+
+.clip-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.clip-kind {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dim);
+}
+
+.clip-kind svg {
+  width: 10px;
+  height: 10px;
+}
+
+.clip-kind.is-url {
+  background: rgba(34, 211, 238, 0.14);
+  color: var(--accent-net);
+}
+
+/* Image entries lay the preview and its details out side by side. */
+.clip-text.is-image {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+/* About three lines of the text rows, so both kinds keep a similar height. */
+.clip-thumb {
+  flex: none;
+  height: 45px;
+  max-width: 140px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.clip-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.clip-info-title {
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* A colour entry shows the colour itself rather than an icon for it. */
+.clip-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.12);
+}
+
+.clip-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clip-content {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.clip-content.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Marks an entry that pastes back with its original styling. */
+.clip-rich {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(167, 139, 250, 0.16);
+  color: #c4b5fd;
+}
+
+.clip-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8.5px;
+  color: var(--dim);
+}
+
+.clip-truncated {
+  color: var(--dim);
+  opacity: 0.75;
+}
+
+.clip-copied {
+  flex: none;
+  align-self: center;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(53, 208, 127, 0.14);
+  border: 1px solid rgba(53, 208, 127, 0.3);
+  color: var(--accent-cpu);
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: copied-in 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes copied-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.clip-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.clip-row:hover .clip-actions,
+.clip-row.is-pinned .clip-actions {
+  opacity: 1;
+}
+
+.clip-action {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.clip-action svg {
+  width: 12px;
+  height: 12px;
+}
+
+.clip-action:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.clip-action.is-pinned {
+  color: var(--accent-disk);
+  opacity: 1;
+}
+
+/* --- Tab bar -------------------------------------------------------------- */
+
+/* One glassy capsule holding the tab icons; the active tab is a filled
+   circle inside it. The island background is nearly opaque, so the glass look
+   is faked with a translucent fill, a frosted noise grain and an inset top
+   highlight. */
+.tabbar {
+  --tab-size: 32px;
+  --tab-gap: 3px;
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tab-gap);
+  align-self: center;
+  margin: 4px 0 12px;
+  padding: 4px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* Frost grain on top of a diagonal sheen: the grain is what reads as
+     "frosted", the sheen as the thickness of the glass. */
+  background:
+    var(--frost-grain),
+    linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.13),
+      rgba(255, 255, 255, 0.035) 48%,
+      rgba(255, 255, 255, 0.02) 62%,
+      rgba(255, 255, 255, 0.08)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px rgba(255, 255, 255, 0.05),
+    0 8px 22px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* The pill that rides between tabs. Positioned from the padding box, one
+   step per tab (width + gap), so it only needs the active index. */
+.tab-indicator {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: var(--tab-size);
+  height: var(--tab-size);
+  border-radius: 50%;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.24),
+    rgba(255, 255, 255, 0.07)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 3px 10px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transform: translateX(
+    calc(var(--tab-index, 0) * (var(--tab-size) + var(--tab-gap)))
+  );
+  transition: transform 320ms cubic-bezier(0.34, 1.32, 0.5, 1);
+  pointer-events: none;
+}
+
+.tab {
+  position: relative;
+  z-index: 1;
+  width: var(--tab-size);
+  height: var(--tab-size);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 180ms ease;
+}
+
+.tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tab.is-active {
+  color: var(--text);
 }
 
 /* --- Cards ---------------------------------------------------------------- */

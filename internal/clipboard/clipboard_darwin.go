@@ -1,0 +1,311 @@
+//go:build darwin && cgo
+
+package clipboard
+
+/*
+#cgo CFLAGS: -x objective-c
+#cgo LDFLAGS: -framework AppKit -framework ImageIO -framework CoreGraphics
+#include <AppKit/AppKit.h>
+#include <ImageIO/ImageIO.h>
+#include <stdlib.h>
+#include <string.h>
+
+// pbChangeCount returns the pasteboard's change counter. It increments on
+// every write, so a cheap poll can detect copies without reading content.
+static long long pbChangeCount(void) {
+	return (long long)[[NSPasteboard generalPasteboard] changeCount];
+}
+
+// pbReadString returns the pasteboard's plain-text content, or NULL when the
+// pasteboard holds no text.
+static char *pbReadString(void) {
+	NSString *s = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
+	if (s == nil) {
+		return NULL;
+	}
+	return strdup([s UTF8String]);
+}
+
+// pbHasURL reports whether the pasteboard holds a URL representation.
+static int pbHasURL(void) {
+	return [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeURL] != NULL ? 1 : 0;
+}
+
+// Caps on what is kept from a copy. Rich text is normally a few kilobytes;
+// the cap only stops a pathological clipboard (a whole web archive) from
+// bloating the history file.
+#define PB_MAX_TYPE_BYTES (512 * 1024)
+#define PB_MAX_TOTAL_BYTES (2 * 1024 * 1024)
+
+// pbReadFormats serialises the pasteboard's non-text, non-image
+// representations (RTF, HTML, file URLs, …) as a binary plist, so a
+// write-back restores exactly what the source app published. Images are
+// captured separately and plain text is stored in full already, so both are
+// skipped. outRich reports whether styled text is among the formats.
+static unsigned char *pbReadFormats(int *outLen, int *outRich) {
+	*outRich = 0;
+	NSPasteboard *pb = [NSPasteboard generalPasteboard];
+	NSMutableArray *items = [NSMutableArray array];
+	NSUInteger total = 0;
+	for (NSString *t in [pb types]) {
+		if ([t isEqualToString:NSPasteboardTypePNG] ||
+		    [t isEqualToString:NSPasteboardTypeTIFF] ||
+		    [t isEqualToString:NSPasteboardTypeString]) {
+			continue;
+		}
+		if ([t isEqualToString:NSPasteboardTypeRTF] ||
+		    [t isEqualToString:NSPasteboardTypeHTML] ||
+		    [t isEqualToString:NSPasteboardTypeRTFD] ||
+		    [t isEqualToString:@"Apple Web Archive pasteboard type"]) {
+			*outRich = 1;
+		}
+		NSData *d = [pb dataForType:t];
+		if (d == nil || [d length] == 0 || [d length] > PB_MAX_TYPE_BYTES) {
+			continue;
+		}
+		if (total + [d length] > PB_MAX_TOTAL_BYTES) {
+			continue;
+		}
+		total += [d length];
+		[items addObject:@{@"type": t, @"data": d}];
+	}
+	if ([items count] == 0) {
+		return NULL;
+	}
+	NSData *plist = [NSPropertyListSerialization dataWithPropertyList:items
+		format:NSPropertyListBinaryFormat_v1_0 options:0 error:NULL];
+	if (plist == nil) {
+		return NULL;
+	}
+	unsigned char *buf = malloc([plist length]);
+	if (buf == NULL) {
+		return NULL;
+	}
+	memcpy(buf, [plist bytes], [plist length]);
+	*outLen = (int)[plist length];
+	return buf;
+}
+
+// pbWriteFormats restores a blob produced by pbReadFormats, preserving type
+// order so the receiving app keeps choosing the same preferred format.
+static int pbWriteFormats(const unsigned char *blob, int len) {
+	NSData *plist = [NSData dataWithBytes:blob length:len];
+	id items = [NSPropertyListSerialization propertyListWithData:plist
+		options:NSPropertyListImmutable format:NULL error:NULL];
+	if (![items isKindOfClass:[NSArray class]] || [items count] == 0) {
+		return 0;
+	}
+	NSPasteboard *pb = [NSPasteboard generalPasteboard];
+	[pb clearContents];
+	// setData:forType: adds each type in call order, which keeps the source
+	// app's preference order without legacy declareTypes promises.
+	int written = 0;
+	for (NSDictionary *item in items) {
+		NSString *t = [item objectForKey:@"type"];
+		NSData *d = [item objectForKey:@"data"];
+		if ([t isKindOfClass:[NSString class]] && [d isKindOfClass:[NSData class]]) {
+			[pb setData:d forType:t];
+			written++;
+		}
+	}
+	return written > 0 ? 1 : 0;
+}
+
+// imageTypeIndex returns the position of the first image representation in
+// the pasteboard's type list, or -1. The list is ordered best-first.
+static NSInteger imageTypeIndex(void) {
+	NSArray *types = [[NSPasteboard generalPasteboard] types];
+	for (NSInteger i = 0; i < (NSInteger)[types count]; i++) {
+		NSString *t = [types objectAtIndex:i];
+		if ([t isEqualToString:NSPasteboardTypePNG] || [t isEqualToString:NSPasteboardTypeTIFF]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+// pbImageIsPrimary reports whether the pasteboard's primary content is an
+// image rather than text. Rich-text copies often carry a rendered image next
+// to the text; only the primary representation is captured.
+static int pbImageIsPrimary(void) {
+	NSInteger image = imageTypeIndex();
+	if (image < 0) {
+		return 0;
+	}
+	NSArray *types = [[NSPasteboard generalPasteboard] types];
+	for (NSInteger i = 0; i < (NSInteger)[types count]; i++) {
+		if ([[types objectAtIndex:i] isEqualToString:NSPasteboardTypeString]) {
+			return image < i ? 1 : 0;
+		}
+	}
+	return 1;
+}
+
+// pbReadImage returns the pasteboard image encoded as PNG. The buffer must be
+// freed by the caller; outLen receives its size.
+static unsigned char *pbReadImage(int *outLen) {
+	NSPasteboard *pb = [NSPasteboard generalPasteboard];
+	NSData *data = [pb dataForType:NSPasteboardTypePNG];
+	if (data == nil) {
+		NSData *tiff = [pb dataForType:NSPasteboardTypeTIFF];
+		if (tiff == nil) {
+			return NULL;
+		}
+		// Normalise to PNG so the file on disk and the bytes the frontend
+		// renders share one format.
+		NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:tiff];
+		if (rep == nil) {
+			return NULL;
+		}
+		data = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+		if (data == nil) {
+			return NULL;
+		}
+	}
+	unsigned char *buf = malloc([data length]);
+	if (buf == NULL) {
+		return NULL;
+	}
+	memcpy(buf, [data bytes], [data length]);
+	*outLen = (int)[data length];
+	return buf;
+}
+
+// pbThumbnail encodes a PNG scaled so its longest side is at most maxDim.
+static unsigned char *pbThumbnail(const unsigned char *src, int len, int maxDim, int *outLen) {
+	NSData *data = [NSData dataWithBytes:src length:len];
+	CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)data, NULL);
+	if (source == NULL) {
+		return NULL;
+	}
+	NSDictionary *options = @{
+		(NSString *)kCGImageSourceCreateThumbnailFromImageAlways: @YES,
+		(NSString *)kCGImageSourceThumbnailMaxPixelSize: [NSNumber numberWithInt:maxDim],
+		(NSString *)kCGImageSourceCreateThumbnailWithTransform: @YES,
+	};
+	CGImageRef image = CGImageSourceCreateThumbnailAtIndex(source, 0, (CFDictionaryRef)options);
+	CFRelease(source);
+	if (image == NULL) {
+		return NULL;
+	}
+	NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithCGImage:image];
+	CGImageRelease(image);
+	NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+	[rep release];
+	if (png == nil) {
+		return NULL;
+	}
+	unsigned char *buf = malloc([png length]);
+	if (buf == NULL) {
+		return NULL;
+	}
+	memcpy(buf, [png bytes], [png length]);
+	*outLen = (int)[png length];
+	return buf;
+}
+
+// pbWriteImageFile puts the PNG stored at path on the pasteboard.
+static int pbWriteImageFile(const char *path) {
+	NSString *p = [NSString stringWithUTF8String:path];
+	NSData *png = [NSData dataWithContentsOfFile:p];
+	if (png == nil) {
+		return 0;
+	}
+	NSPasteboard *pb = [NSPasteboard generalPasteboard];
+	[pb clearContents];
+	BOOL ok = [pb setData:png forType:NSPasteboardTypePNG];
+	// Most apps read the older TIFF type, so publish both.
+	NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:png];
+	if (rep != nil) {
+		NSData *tiff = [rep representationUsingType:NSBitmapImageFileTypeTIFF properties:@{}];
+		if (tiff != nil) {
+			ok = [pb setData:tiff forType:NSPasteboardTypeTIFF] || ok;
+		}
+	}
+	return ok ? 1 : 0;
+}
+*/
+import "C"
+
+import (
+	"unsafe"
+)
+
+// changeCount returns the pasteboard's current change counter.
+func changeCount() int64 {
+	return int64(C.pbChangeCount())
+}
+
+// readText returns the pasteboard's plain-text content. The second return
+// value reports whether any text was available.
+func readText() (string, bool) {
+	cText := C.pbReadString()
+	if cText == nil {
+		return "", false
+	}
+	defer C.free(unsafe.Pointer(cText))
+	return C.GoString(cText), true
+}
+
+// hasURL reports whether the pasteboard holds a URL.
+func hasURL() bool {
+	return C.pbHasURL() != 0
+}
+
+// imagePrimary reports whether the pasteboard's primary content is an image.
+func imagePrimary() bool {
+	return C.pbImageIsPrimary() != 0
+}
+
+// readImage returns the pasteboard image encoded as PNG.
+func readImage() ([]byte, bool) {
+	var length C.int
+	buf := C.pbReadImage(&length)
+	if buf == nil {
+		return nil, false
+	}
+	defer C.free(unsafe.Pointer(buf))
+	return C.GoBytes(unsafe.Pointer(buf), length), true
+}
+
+// thumbnailPNG scales PNG data so its longest side is at most maxDim.
+func thumbnailPNG(png []byte, maxDim int) ([]byte, bool) {
+	if len(png) == 0 {
+		return nil, false
+	}
+	var length C.int
+	buf := C.pbThumbnail((*C.uchar)(unsafe.Pointer(&png[0])), C.int(len(png)), C.int(maxDim), &length)
+	if buf == nil {
+		return nil, false
+	}
+	defer C.free(unsafe.Pointer(buf))
+	return C.GoBytes(unsafe.Pointer(buf), length), true
+}
+
+// readFormats returns the pasteboard's extra representations as an opaque
+// plist blob. rich reports whether styled text is included.
+func readFormats() (blob []byte, rich bool, ok bool) {
+	var length C.int
+	var cRich C.int
+	buf := C.pbReadFormats(&length, &cRich)
+	if buf == nil {
+		return nil, false, false
+	}
+	defer C.free(unsafe.Pointer(buf))
+	return C.GoBytes(unsafe.Pointer(buf), length), cRich != 0, true
+}
+
+// WriteFormats restores representations captured by readFormats.
+func WriteFormats(blob []byte) bool {
+	if len(blob) == 0 {
+		return false
+	}
+	return C.pbWriteFormats((*C.uchar)(unsafe.Pointer(&blob[0])), C.int(len(blob))) != 0
+}
+
+// WriteImageFile restores a stored image to the pasteboard.
+func WriteImageFile(path string) bool {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	return C.pbWriteImageFile(cPath) != 0
+}

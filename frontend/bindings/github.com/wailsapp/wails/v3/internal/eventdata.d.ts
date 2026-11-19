@@ -7,11 +7,15 @@ import type { Events } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import type * as clipboard$0 from "../../../../../doter/internal/clipboard/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import type * as sysinfo$0 from "../../../../../doter/internal/sysinfo/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "clipboard:update": clipboard$0.Entry;
             "sysinfo:update": sysinfo$0.Snapshot;
         }
     }

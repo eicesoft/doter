@@ -4,13 +4,17 @@ import (
 	"context"
 	"embed"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
+	"doter/internal/clipboard"
 	"doter/internal/notch"
 	"doter/internal/services"
 	"doter/internal/sysinfo"
+	"doter/internal/weather"
 )
 
 // The React frontend is embedded into the binary at build time.
@@ -28,11 +32,16 @@ func init() {
 	// Typed custom event: the binding generator exposes matching TypeScript
 	// types for `sysinfo:update`.
 	application.RegisterEvent[sysinfo.Snapshot](services.EventSnapshot)
+	// The same for `clipboard:update`.
+	application.RegisterEvent[clipboard.Entry](services.EventClipboard)
 }
 
 func main() {
 	sampler := sysinfo.NewSampler()
 	systemService := services.NewSystemService(sampler)
+
+	clipboardHistory := clipboard.NewHistory(clipboardHistoryPath())
+	clipboardWatcher := clipboard.NewWatcher(clipboardHistory)
 
 	app := application.New(application.Options{
 		Name:        "Doter",
@@ -64,6 +73,10 @@ func main() {
 		URL:   "/",
 	})
 	app.RegisterService(application.NewService(services.NewIslandService(island, app)))
+	app.RegisterService(application.NewService(services.NewClipboardService(clipboardHistory, app)))
+
+	weatherClient := weather.NewClient(weatherLocationPath())
+	app.RegisterService(application.NewService(services.NewWeatherService(weatherClient)))
 
 	tray := app.SystemTray.New()
 	tray.SetTooltip("Doter — system monitor")
@@ -82,11 +95,33 @@ func main() {
 		island.PlaceAndShow()
 		sampler.Start(context.Background())
 		go pumpSnapshots(app, sampler)
+		clipboardWatcher.Start(context.Background())
+		go pumpClipboard(app, clipboardWatcher)
 	})
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// clipboardHistoryPath is where the clipboard history is persisted between
+// runs.
+func clipboardHistoryPath() string {
+	return configPath("clipboard.json")
+}
+
+// weatherLocationPath is where the pinned weather location is persisted.
+func weatherLocationPath() string {
+	return configPath("weather.json")
+}
+
+// configPath returns the path of a file in the app's config directory.
+func configPath(name string) string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "doter", name)
 }
 
 func buildTrayMenu(app *application.App, island *notch.Controller) *application.Menu {
@@ -106,5 +141,12 @@ func buildTrayMenu(app *application.App, island *notch.Controller) *application.
 func pumpSnapshots(app *application.App, sampler *sysinfo.Sampler) {
 	for snapshot := range sampler.Updates() {
 		app.Event.Emit(services.EventSnapshot, snapshot)
+	}
+}
+
+// pumpClipboard forwards new clipboard entries to the frontend.
+func pumpClipboard(app *application.App, watcher *clipboard.Watcher) {
+	for entry := range watcher.Updates() {
+		app.Event.Emit(services.EventClipboard, entry)
 	}
 }

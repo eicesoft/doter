@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { Snapshot, StaticInfo } from "../../bindings/doter/internal/sysinfo/models";
@@ -14,6 +15,9 @@ import {
 } from "../lib/format";
 import { Meter, Ring } from "./Ring";
 import { Sparkline } from "./Sparkline";
+import { TabBar, type TabId } from "./TabBar";
+import { ClipboardPanel } from "./ClipboardPanel";
+import { WeatherPanel } from "./WeatherPanel";
 
 interface ExpandedPanelProps {
   snapshot: Snapshot | null;
@@ -69,6 +73,8 @@ export function ExpandedPanel({
   onTogglePin,
   onFocusIsland,
 }: ExpandedPanelProps) {
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
+
   const cpuUsage = snapshot?.cpu.usage ?? 0;
   const perCore = snapshot?.cpu.perCore ?? [];
   const memory = snapshot?.memory;
@@ -137,162 +143,192 @@ export function ExpandedPanel({
         </div>
       </header>
 
-      <div className="panel-body">
-        <Card label="Processor" hint={shortCPUModel(staticInfo?.cpuModel ?? "")} accent="var(--accent-cpu)">
-          <div className="cpu-split">
-            <Ring value={cpuUsage} size={62} stroke={5} color="var(--accent-cpu)">
-              <span className="ring-value">
-                {Math.round(cpuUsage)}
-                <small>%</small>
-              </span>
-            </Ring>
-            <div className="cpu-facts">
-              <KV label="Threads" value={threads || "—"} />
-              <KV label="Cores" value={cores || "—"} />
-            </div>
-          </div>
-          <Sparkline
-            data={cpuSeries}
-            max={100}
-            height={20}
-            color="var(--accent-cpu)"
-            className="card-spark"
-          />
-        </Card>
-
-        <Card
-          label="Memory"
-          hint={formatPercent(memory?.usedPercent ?? 0)}
-          accent="var(--accent-mem)"
-        >
-          <div className="metric-big">
-            {formatPercent(memory?.usedPercent ?? 0)}
-            <span className="metric-sub">
-              {formatBytes(memory?.used ?? 0)} / {formatBytes(memory?.total ?? 0)}
-            </span>
-          </div>
-          <Meter value={memory?.usedPercent ?? 0} color="var(--accent-mem)" />
-          <div className="card-foot">
-            <span>Swap</span>
-            <span>
-              {swap && swap.total > 0
-                ? `${formatBytes(swap.used)} / ${formatBytes(swap.total)}`
-                : "None"}
-            </span>
-          </div>
-        </Card>
-
-        <Card
-          label="Storage"
-          hint={disks.length > 1 ? `${disks.length} volumes` : primaryDisk?.fstype}
-          accent="var(--accent-disk)"
-        >
-          {primaryDisk ? (
-            <div className="disk-list">
-              {[primaryDisk, secondaryDisk].filter(Boolean).map((disk) => (
-                <div className="disk-row" key={disk!.mountpoint}>
-                  <div className="disk-meta">
-                    <span className="disk-name" title={disk!.mountpoint}>
-                      {disk!.mountpoint}
-                    </span>
-                    <span className="disk-pct">{formatPercent(disk!.usedPercent)}</span>
-                  </div>
-                  <Meter value={disk!.usedPercent} color="var(--accent-disk)" />
-                  <div className="disk-sub">
-                    {formatBytes(disk!.used)} of {formatBytes(disk!.total)}
-                  </div>
+      <div className="panel-body" data-tab={activeTab} key={activeTab}>
+        {activeTab === "overview" && (
+          <>
+            <Card label="Processor" hint={shortCPUModel(staticInfo?.cpuModel ?? "")} accent="var(--accent-cpu)">
+              <div className="cpu-split">
+                <Ring value={cpuUsage} size={62} stroke={5} color="var(--accent-cpu)">
+                  <span className="ring-value">
+                    {Math.round(cpuUsage)}
+                    <small>%</small>
+                  </span>
+                </Ring>
+                <div className="cpu-facts">
+                  <KV label="Threads" value={threads || "—"} />
+                  <KV label="Cores" value={cores || "—"} />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">Reading volumes…</div>
-          )}
-        </Card>
+              </div>
+              <Sparkline
+                data={cpuSeries}
+                max={100}
+                height={20}
+                color="var(--accent-cpu)"
+                className="card-spark"
+              />
+            </Card>
 
-        <Card
-          label="Network"
-          hint={netInterface ?? "offline"}
-          accent="var(--accent-net)"
-        >
-          <div className="net-speeds">
-            <div className="net-speed">
-              <span className="net-arrow down">↓</span>
-              <b>{formatSpeed(network?.downSpeed ?? 0)}</b>
-            </div>
-            <div className="net-speed">
-              <span className="net-arrow up">↑</span>
-              <b>{formatSpeed(network?.upSpeed ?? 0)}</b>
-            </div>
-          </div>
-          <Sparkline
-            data={netSeries}
-            height={24}
-            color="var(--accent-net)"
-            className="card-spark"
-          />
-        </Card>
-
-        <Card
-          label="Power"
-          hint={battery ? battery.state : "AC"}
-          accent="var(--accent-battery)"
-        >
-          {battery ? (
-            <>
+            <Card
+              label="Memory"
+              hint={formatPercent(memory?.usedPercent ?? 0)}
+              accent="var(--accent-mem)"
+            >
               <div className="metric-big">
-                {formatPercent(battery.percent)}
+                {formatPercent(memory?.usedPercent ?? 0)}
                 <span className="metric-sub">
-                  {battery.secondsLeft >= 0
-                    ? `${formatDuration(battery.secondsLeft)} left`
-                    : battery.pluggedIn
-                      ? "on power"
-                      : "estimating…"}
+                  {formatBytes(memory?.used ?? 0)} / {formatBytes(memory?.total ?? 0)}
                 </span>
               </div>
-              <Meter value={battery.percent} color="var(--accent-battery)" />
+              <Meter value={memory?.usedPercent ?? 0} color="var(--accent-mem)" />
               <div className="card-foot">
-                <span>{battery.pluggedIn ? "Charger connected" : "On battery"}</span>
-                <span>{battery.state}</span>
+                <span>Swap</span>
+                <span>
+                  {swap && swap.total > 0
+                    ? `${formatBytes(swap.used)} / ${formatBytes(swap.total)}`
+                    : "None"}
+                </span>
               </div>
-            </>
-          ) : (
+            </Card>
+
+            <Card
+              label="Storage"
+              hint={disks.length > 1 ? `${disks.length} volumes` : primaryDisk?.fstype}
+              accent="var(--accent-disk)"
+            >
+              {primaryDisk ? (
+                <div className="disk-list">
+                  {[primaryDisk, secondaryDisk].filter(Boolean).map((disk) => (
+                    <div className="disk-row" key={disk!.mountpoint}>
+                      <div className="disk-meta">
+                        <span className="disk-name" title={disk!.mountpoint}>
+                          {disk!.mountpoint}
+                        </span>
+                        <span className="disk-pct">{formatPercent(disk!.usedPercent)}</span>
+                      </div>
+                      <Meter value={disk!.usedPercent} color="var(--accent-disk)" />
+                      <div className="disk-sub">
+                        {formatBytes(disk!.used)} of {formatBytes(disk!.total)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">Reading volumes…</div>
+              )}
+            </Card>
+
+            <Card
+              label="Network"
+              hint={netInterface ?? "offline"}
+              accent="var(--accent-net)"
+            >
+              <div className="net-speeds">
+                <div className="net-speed">
+                  <span className="net-arrow down">↓</span>
+                  <b>{formatSpeed(network?.downSpeed ?? 0)}</b>
+                </div>
+                <div className="net-speed">
+                  <span className="net-arrow up">↑</span>
+                  <b>{formatSpeed(network?.upSpeed ?? 0)}</b>
+                </div>
+              </div>
+              <Sparkline
+                data={netSeries}
+                height={24}
+                color="var(--accent-net)"
+                className="card-spark"
+              />
+            </Card>
+
+            <Card
+              label="Power"
+              hint={battery ? battery.state : "AC"}
+              accent="var(--accent-battery)"
+            >
+              {battery ? (
+                <>
+                  <div className="metric-big">
+                    {formatPercent(battery.percent)}
+                    <span className="metric-sub">
+                      {battery.secondsLeft >= 0
+                        ? `${formatDuration(battery.secondsLeft)} left`
+                        : battery.pluggedIn
+                          ? "on power"
+                          : "estimating…"}
+                    </span>
+                  </div>
+                  <Meter value={battery.percent} color="var(--accent-battery)" />
+                  <div className="card-foot">
+                    <span>{battery.pluggedIn ? "Charger connected" : "On battery"}</span>
+                    <span>{battery.state}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="empty-state">
+                  <span className="power-glyph">⚡</span>
+                  <div>
+                    <b>AC power</b>
+                    <span>No battery detected</span>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <Card label="System" accent="var(--accent-sys)">
+              <div className="facts">
+                <KV label="Uptime" value={formatUptime(snapshot?.uptime ?? 0)} />
+                <KV label="Load 1m" value={load ? load.load1.toFixed(2) : "—"} />
+                <KV label="Arch" value={staticInfo?.kernelArch || "—"} />
+              </div>
+            </Card>
+
+            <Card label="Top processes" hint="CPU · MEM" accent="var(--accent-cpu)" wide>
+              <div className="proc-table">
+                {processes.length === 0 ? (
+                  <div className="empty-state">Collecting process data…</div>
+                ) : (
+                  processes.map((process) => (
+                    <div className="proc-row" key={process.pid}>
+                      <span className="proc-name" title={process.name}>
+                        {process.name}
+                      </span>
+                      <span className="proc-pid">{process.pid}</span>
+                      <span className="proc-cpu">{formatPercent(process.cpuPercent, 1)}</span>
+                      <span className="proc-mem">{formatPercent(process.memoryPercent, 1)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </>
+        )}
+
+        {activeTab === "weather" && (
+          <Card label="Weather" accent="var(--accent-net)" wide>
+            <WeatherPanel onFocusIsland={onFocusIsland} />
+          </Card>
+        )}
+
+        {activeTab === "music" && (
+          <Card label="Music" hint="即将上线" accent="var(--accent-net)" wide>
             <div className="empty-state">
-              <span className="power-glyph">⚡</span>
+              <span className="power-glyph">♪</span>
               <div>
-                <b>AC power</b>
-                <span>No battery detected</span>
+                <b>Nothing playing</b>
+                <span>音乐控制即将上线</span>
               </div>
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
 
-        <Card label="System" accent="var(--accent-sys)">
-          <div className="facts">
-            <KV label="Uptime" value={formatUptime(snapshot?.uptime ?? 0)} />
-            <KV label="Load 1m" value={load ? load.load1.toFixed(2) : "—"} />
-            <KV label="Arch" value={staticInfo?.kernelArch || "—"} />
-          </div>
-        </Card>
-
-        <Card label="Top processes" hint="CPU · MEM" accent="var(--accent-cpu)" wide>
-          <div className="proc-table">
-            {processes.length === 0 ? (
-              <div className="empty-state">Collecting process data…</div>
-            ) : (
-              processes.map((process) => (
-                <div className="proc-row" key={process.pid}>
-                  <span className="proc-name" title={process.name}>
-                    {process.name}
-                  </span>
-                  <span className="proc-pid">{process.pid}</span>
-                  <span className="proc-cpu">{formatPercent(process.cpuPercent, 1)}</span>
-                  <span className="proc-mem">{formatPercent(process.memoryPercent, 1)}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+        {activeTab === "clipboard" && (
+          <Card label="Clipboard" accent="var(--accent-disk)" wide>
+            <ClipboardPanel onFocusIsland={onFocusIsland} />
+          </Card>
+        )}
       </div>
+
+      <TabBar active={activeTab} onSelect={setActiveTab} onFocusIsland={onFocusIsland} />
     </div>
   );
 }

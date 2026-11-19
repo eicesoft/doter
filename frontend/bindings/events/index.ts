@@ -9,6 +9,11 @@ import type {} from "../github.com/wailsapp/wails/v3/internal/eventdata.js";
 import "../github.com/wailsapp/wails/v3/internal/eventcreate.js";
 
 /**
+ * Name of the custom event "clipboard:update".
+ */
+export const ClipboardUpdate = "clipboard:update";
+
+/**
  * Name of the custom event "sysinfo:update".
  */
 export const SysinfoUpdate = "sysinfo:update";

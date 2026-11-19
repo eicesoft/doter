@@ -21,7 +21,7 @@ const (
 	DefaultCollapsedWidth  = 200
 	DefaultCollapsedHeight = 46
 	DefaultExpandedWidth   = 660
-	DefaultExpandedHeight  = 520
+	DefaultExpandedHeight  = 560
 
 	// notchSideWidth is the room kept on each side of the camera housing for
 	// the idle pill's content. Keep it tight: every extra point covers the
