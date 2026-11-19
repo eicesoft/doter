@@ -42,6 +42,8 @@ interface ExpandedPanelProps {
   onSetAlertsEnabled: (enabled: boolean) => void;
   onSetClipboardPaused: (paused: boolean) => void;
   onSetClipboardHotkeyEnabled: (enabled: boolean) => void;
+  onSetAutostart: (enabled: boolean) => void;
+  onSetHideOnFullscreen: (enabled: boolean) => void;
 }
 
 interface CardProps {
@@ -98,6 +100,8 @@ export function ExpandedPanel({
   onSetAlertsEnabled,
   onSetClipboardPaused,
   onSetClipboardHotkeyEnabled,
+  onSetAutostart,
+  onSetHideOnFullscreen,
 }: ExpandedPanelProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
@@ -222,6 +226,8 @@ export function ExpandedPanel({
                 onSetAlertsEnabled={onSetAlertsEnabled}
                 onSetClipboardPaused={onSetClipboardPaused}
                 onSetClipboardHotkeyEnabled={onSetClipboardHotkeyEnabled}
+                onSetAutostart={onSetAutostart}
+                onSetHideOnFullscreen={onSetHideOnFullscreen}
                 onClose={() => setSettingsOpen(false)}
               />
             )}

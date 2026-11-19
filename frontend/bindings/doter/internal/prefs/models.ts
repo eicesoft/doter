@@ -19,4 +19,14 @@ export interface Settings {
      * ClipboardHotkeyEnabled controls the global clipboard shortcut.
      */
     "clipboardHotkeyEnabled": boolean;
+
+    /**
+     * Autostart launches Doter at login.
+     */
+    "autostart": boolean;
+
+    /**
+     * HideOnFullscreen hides the island while another app is fullscreen.
+     */
+    "hideOnFullscreen": boolean;
 }

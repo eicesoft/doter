@@ -13,7 +13,7 @@ func TestSettingsServicePersistsAndAppliesClipboardPause(t *testing.T) {
 	store := prefs.New(filepath.Join(dir, "settings.json"))
 	watcher := clipboard.NewWatcher(clipboard.NewHistory(filepath.Join(dir, "clipboard.json")))
 	var hotkeyEnabled bool
-	service := NewSettingsService(store, watcher, nil, func(enabled bool) {
+	service := NewSettingsService(nil, store, watcher, nil, func(enabled bool) {
 		hotkeyEnabled = enabled
 	})
 
@@ -41,5 +41,17 @@ func TestSettingsServicePersistsAndAppliesClipboardPause(t *testing.T) {
 	}
 	if store.Get().ClipboardHotkeyEnabled {
 		t.Fatal("hotkey flag was not persisted")
+	}
+
+	service.SetHideOnFullscreen(false)
+	if store.Get().HideOnFullscreen {
+		t.Fatal("fullscreen flag was not persisted")
+	}
+
+	if _, err := service.SetAutostart(true); err != nil {
+		t.Fatalf("autostart with no app: %v", err)
+	}
+	if !store.Get().Autostart {
+		t.Fatal("autostart flag was not persisted")
 	}
 }

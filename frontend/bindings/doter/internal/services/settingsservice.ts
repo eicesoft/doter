@@ -30,6 +30,14 @@ export function SetAlertsEnabled(enabled: boolean): $CancellablePromise<prefs$0.
 }
 
 /**
+ * SetAutostart registers or removes the login item. The persisted value is
+ * only updated after the platform accepted the change.
+ */
+export function SetAutostart(enabled: boolean): $CancellablePromise<prefs$0.Settings> {
+    return $Call.ByID(554775107, enabled);
+}
+
+/**
  * SetClipboardHotkeyEnabled binds or releases the global clipboard shortcut.
  */
 export function SetClipboardHotkeyEnabled(enabled: boolean): $CancellablePromise<prefs$0.Settings> {
@@ -41,4 +49,11 @@ export function SetClipboardHotkeyEnabled(enabled: boolean): $CancellablePromise
  */
 export function SetClipboardPaused(paused: boolean): $CancellablePromise<prefs$0.Settings> {
     return $Call.ByID(1185644826, paused);
+}
+
+/**
+ * SetHideOnFullscreen toggles hiding the island over fullscreen apps.
+ */
+export function SetHideOnFullscreen(enabled: boolean): $CancellablePromise<prefs$0.Settings> {
+    return $Call.ByID(3856566078, enabled);
 }

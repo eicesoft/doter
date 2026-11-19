@@ -6,14 +6,18 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/wailsapp/wails/v3/pkg/updater"
+	"github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 
 	"doter/internal/agents"
 	"doter/internal/alerts"
 	"doter/internal/clipboard"
+	"doter/internal/fullscreen"
 	"doter/internal/notch"
 	"doter/internal/prefs"
 	"doter/internal/services"
@@ -34,6 +38,12 @@ var trayIcon []byte
 
 // clipboardHotkey is the global shortcut that opens the clipboard tab.
 const clipboardHotkey = "CmdOrCtrl+Shift+V"
+
+// appVersion must match info.version in build/config.yml.
+const appVersion = "0.1.0"
+
+// singleInstanceID matches CFBundleIdentifier in build/darwin/Info.plist.
+const singleInstanceID = "com.example.doter"
 
 func init() {
 	// Typed custom event: the binding generator exposes matching TypeScript
@@ -59,10 +69,21 @@ func main() {
 	clipboardWatcher := clipboard.NewWatcher(clipboardHistory)
 	notificationService := notifications.New()
 
+	var island *notch.Controller
 	app := application.New(application.Options{
 		Name:        "Doter",
 		Description: "A system monitor that lives in the notch",
 		Icon:        appIcon,
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: singleInstanceID,
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				if island == nil {
+					return
+				}
+				island.Show()
+				island.Focus()
+			},
+		},
 		Services: []application.Service{
 			application.NewService(systemService),
 			application.NewService(notificationService),
@@ -84,7 +105,7 @@ func main() {
 		},
 	})
 
-	island := notch.New(app, notch.Options{
+	island = notch.New(app, notch.Options{
 		Name:  "island",
 		Title: "Doter",
 		URL:   "/",
@@ -117,12 +138,38 @@ func main() {
 	}
 
 	settingsService := services.NewSettingsService(
+		app,
 		prefsStore,
 		clipboardWatcher,
 		func() { go requestNotificationPermission(notificationService) },
 		setClipboardHotkey,
 	)
 	app.RegisterService(application.NewService(settingsService))
+
+	updateProvider, err := github.New(github.Config{
+		Repository:    "eicesoft/doter",
+		ChecksumAsset: "checksums.txt",
+	})
+	if err != nil {
+		log.Printf("updater provider: %v", err)
+	} else if err := app.Updater.Init(updater.Config{
+		CurrentVersion: appVersion,
+		Providers:      []updater.Provider{updateProvider},
+		Window: &updater.BuiltinWindow{Options: updater.WindowOptions{
+			Title: "Doter 更新",
+		}},
+	}); err != nil {
+		log.Printf("updater init: %v", err)
+	}
+	updateService := services.NewUpdateService(app)
+	app.RegisterService(application.NewService(updateService))
+
+	// The OS is the source of truth for the login item; mirror it into the
+	// settings so the UI starts in the right state.
+	if enabled, statErr := app.Autostart.IsEnabled(); statErr == nil &&
+		enabled != prefsStore.Get().Autostart {
+		prefsStore.SetAutostart(enabled)
+	}
 
 	weatherClient := weather.NewClient(weatherLocationPath())
 	app.RegisterService(application.NewService(services.NewWeatherService(weatherClient)))
@@ -148,7 +195,7 @@ func main() {
 	tray := app.SystemTray.New()
 	tray.SetTooltip("Doter — system monitor")
 	tray.SetIcon(trayIcon)
-	tray.SetMenu(buildTrayMenu(app, island))
+	tray.SetMenu(buildTrayMenu(app, island, updateService))
 
 	// A global shortcut is the quickest way to bring the island back after a
 	// hide, especially on Windows where the tray overflow can swallow icons.
@@ -171,6 +218,7 @@ func main() {
 		go pumpClipboard(app, clipboardWatcher)
 		agentMonitor.Start(context.Background())
 		go pumpAgents(app, agentMonitor, alertEngine)
+		go watchFullscreen(island, prefsStore)
 		if alertsEnabled() {
 			go requestNotificationPermission(notificationService)
 		}
@@ -207,11 +255,14 @@ func configPath(name string) string {
 	return filepath.Join(dir, "doter", name)
 }
 
-func buildTrayMenu(app *application.App, island *notch.Controller) *application.Menu {
+func buildTrayMenu(app *application.App, island *notch.Controller, updateService *services.UpdateService) *application.Menu {
 	menu := application.NewMenu()
 
 	menu.Add("Show / Hide island").OnClick(func(*application.Context) {
 		island.ToggleVisible()
+	})
+	menu.Add("Check for updates").OnClick(func(*application.Context) {
+		updateService.Check()
 	})
 	menu.AddSeparator()
 	menu.Add("Quit Doter").OnClick(func(*application.Context) {
@@ -282,5 +333,32 @@ func requestNotificationPermission(service *notifications.NotificationService) {
 	}
 	if !allowed {
 		log.Printf("notifications are not authorized; alerts will stay silent")
+	}
+}
+
+// watchFullscreen hides the island on the rising edge of a fullscreen app and
+// restores it on the falling edge. Edge-triggering matters: if the user manually
+// reveals the island while a video is playing, the watcher must not hide it
+// again every tick.
+func watchFullscreen(island *notch.Controller, store *prefs.Store) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	wasActive := false
+	hiddenByUs := false
+	for range ticker.C {
+		active := store.Get().HideOnFullscreen && fullscreen.Active()
+		switch {
+		case active && !wasActive && island.Visible():
+			island.Hide()
+			hiddenByUs = true
+		case !active && wasActive && hiddenByUs:
+			island.Show()
+			hiddenByUs = false
+		}
+		if !active {
+			hiddenByUs = false
+		}
+		wasActive = active
 	}
 }

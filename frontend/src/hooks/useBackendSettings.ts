@@ -3,14 +3,22 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Get,
   SetAlertsEnabled,
+  SetAutostart,
   SetClipboardHotkeyEnabled,
   SetClipboardPaused,
+  SetHideOnFullscreen,
 } from "../../bindings/doter/internal/services/settingsservice";
 import type { Settings } from "../../bindings/doter/internal/prefs/models";
 
 /** Backend defaults, used until the service answers or when it fails. */
 function fallback(): Settings {
-  return { alertsEnabled: true, clipboardPaused: false, clipboardHotkeyEnabled: true };
+  return {
+    alertsEnabled: true,
+    clipboardPaused: false,
+    clipboardHotkeyEnabled: true,
+    autostart: false,
+    hideOnFullscreen: true,
+  };
 }
 
 /**
@@ -22,6 +30,8 @@ export function useBackendSettings(): {
   setAlertsEnabled: (enabled: boolean) => void;
   setClipboardPaused: (paused: boolean) => void;
   setClipboardHotkeyEnabled: (enabled: boolean) => void;
+  setAutostart: (enabled: boolean) => void;
+  setHideOnFullscreen: (enabled: boolean) => void;
 } {
   const [settings, setSettings] = useState<Settings>(fallback);
 
@@ -57,5 +67,24 @@ export function useBackendSettings(): {
       .catch(() => {});
   }, []);
 
-  return { settings, setAlertsEnabled, setClipboardPaused, setClipboardHotkeyEnabled };
+  const setAutostart = useCallback((enabled: boolean) => {
+    SetAutostart(enabled)
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  const setHideOnFullscreen = useCallback((enabled: boolean) => {
+    SetHideOnFullscreen(enabled)
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  return {
+    settings,
+    setAlertsEnabled,
+    setClipboardPaused,
+    setClipboardHotkeyEnabled,
+    setAutostart,
+    setHideOnFullscreen,
+  };
 }

@@ -1,8 +1,13 @@
+import { useEffect, useState } from "react";
+
 import type { Settings as BackendSettings } from "../../bindings/doter/internal/prefs/models";
+import { Check, Version } from "../../bindings/doter/internal/services/updateservice";
 import {
   CARD_OPTIONS,
+  COLLAPSED_OPTIONS,
   defaultSettings,
   type CardKey,
+  type CollapsedMetric,
   type Settings,
 } from "../lib/settings";
 
@@ -13,6 +18,8 @@ interface SettingsPopoverProps {
   onSetAlertsEnabled: (enabled: boolean) => void;
   onSetClipboardPaused: (paused: boolean) => void;
   onSetClipboardHotkeyEnabled: (enabled: boolean) => void;
+  onSetAutostart: (enabled: boolean) => void;
+  onSetHideOnFullscreen: (enabled: boolean) => void;
   onClose: () => void;
 }
 
@@ -24,11 +31,28 @@ export function SettingsPopover({
   onSetAlertsEnabled,
   onSetClipboardPaused,
   onSetClipboardHotkeyEnabled,
+  onSetAutostart,
+  onSetHideOnFullscreen,
   onClose,
 }: SettingsPopoverProps) {
+  const [version, setVersion] = useState("");
   const setCard = (key: CardKey, value: boolean) => {
     onChange({ ...settings, cards: { ...settings.cards, [key]: value } });
   };
+  const setCollapsed = (index: 0 | 1, metric: CollapsedMetric) => {
+    const collapsed: [CollapsedMetric, CollapsedMetric] = [
+      settings.collapsed[0],
+      settings.collapsed[1],
+    ];
+    collapsed[index] = metric;
+    onChange({ ...settings, collapsed });
+  };
+
+  useEffect(() => {
+    Version()
+      .then(setVersion)
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="settings-popover" role="dialog" aria-label="设置">
@@ -85,6 +109,38 @@ export function SettingsPopover({
       />
       <div className="settings-note">⌘/Ctrl + Shift + V 打开剪贴板</div>
 
+      <div className="settings-section">折叠胶囊</div>
+      <SelectRow
+        label="左侧"
+        value={settings.collapsed[0]}
+        onChange={(value) => setCollapsed(0, value)}
+      />
+      <SelectRow
+        label="右侧"
+        value={settings.collapsed[1]}
+        onChange={(value) => setCollapsed(1, value)}
+      />
+
+      <div className="settings-section">应用</div>
+      <ToggleRow
+        label="开机自启"
+        accent="var(--accent-cpu)"
+        checked={backendSettings.autostart}
+        onChange={onSetAutostart}
+      />
+      <ToggleRow
+        label="全屏时自动隐藏"
+        accent="var(--accent-net)"
+        checked={backendSettings.hideOnFullscreen}
+        onChange={onSetHideOnFullscreen}
+      />
+      <div className="settings-update">
+        <span>Doter {version || "—"}</span>
+        <button type="button" onClick={() => void Check().catch(() => {})}>
+          检查更新
+        </button>
+      </div>
+
       <div className="settings-foot">
         <span>更改即时生效</span>
         <button
@@ -104,6 +160,30 @@ interface ToggleRowProps {
   checked: boolean;
   accent?: string;
   onChange: (value: boolean) => void;
+}
+
+interface SelectRowProps {
+  label: string;
+  value: CollapsedMetric;
+  onChange: (value: CollapsedMetric) => void;
+}
+
+function SelectRow({ label, value, onChange }: SelectRowProps) {
+  return (
+    <label className="settings-select-row">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as CollapsedMetric)}
+      >
+        {COLLAPSED_OPTIONS.map((option) => (
+          <option key={option.key} value={option.key}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function ToggleRow({ label, checked, accent, onChange }: ToggleRowProps) {

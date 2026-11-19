@@ -17,6 +17,10 @@ type Settings struct {
 	ClipboardPaused bool `json:"clipboardPaused"`
 	// ClipboardHotkeyEnabled controls the global clipboard shortcut.
 	ClipboardHotkeyEnabled bool `json:"clipboardHotkeyEnabled"`
+	// Autostart launches Doter at login.
+	Autostart bool `json:"autostart"`
+	// HideOnFullscreen hides the island while another app is fullscreen.
+	HideOnFullscreen bool `json:"hideOnFullscreen"`
 }
 
 // Default returns the defaults for a fresh install.
@@ -25,6 +29,8 @@ func Default() Settings {
 		AlertsEnabled:          true,
 		ClipboardPaused:        false,
 		ClipboardHotkeyEnabled: true,
+		Autostart:              false,
+		HideOnFullscreen:       true,
 	}
 }
 
@@ -78,6 +84,20 @@ func (s *Store) SetClipboardPaused(paused bool) Settings {
 func (s *Store) SetClipboardHotkeyEnabled(enabled bool) Settings {
 	return s.update(func(settings *Settings) {
 		settings.ClipboardHotkeyEnabled = enabled
+	})
+}
+
+// SetAutostart records the login-item state.
+func (s *Store) SetAutostart(enabled bool) Settings {
+	return s.update(func(settings *Settings) {
+		settings.Autostart = enabled
+	})
+}
+
+// SetHideOnFullscreen toggles hiding the island over fullscreen apps.
+func (s *Store) SetHideOnFullscreen(enabled bool) Settings {
+	return s.update(func(settings *Settings) {
+		settings.HideOnFullscreen = enabled
 	})
 }
 

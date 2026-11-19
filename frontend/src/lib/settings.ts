@@ -9,6 +9,15 @@ export type CardKey =
   | "system"
   | "processes";
 
+/** The two metrics shown in the idle pill. */
+export type CollapsedMetric =
+  | "cpu"
+  | "memory"
+  | "network"
+  | "battery"
+  | "agents"
+  | "clock";
+
 export interface Settings {
   /** Expand the island when the pointer enters it. */
   hoverExpand: boolean;
@@ -16,6 +25,8 @@ export interface Settings {
   clockSeconds: boolean;
   /** Metric cards shown on the overview tab. */
   cards: Record<CardKey, boolean>;
+  /** Left and right pill metrics. */
+  collapsed: [CollapsedMetric, CollapsedMetric];
 }
 
 export const CARD_KEYS: readonly CardKey[] = [
@@ -39,6 +50,17 @@ export const CARD_OPTIONS: readonly { key: CardKey; label: string; accent: strin
   { key: "processes", label: "进程榜", accent: "var(--accent-cpu)" },
 ];
 
+export const COLLAPSED_OPTIONS: readonly { key: CollapsedMetric; label: string }[] = [
+  { key: "cpu", label: "处理器" },
+  { key: "memory", label: "内存" },
+  { key: "network", label: "网络" },
+  { key: "battery", label: "电池" },
+  { key: "agents", label: "Agent" },
+  { key: "clock", label: "时钟" },
+];
+
+const COLLAPSED_KEYS = new Set<CollapsedMetric>(COLLAPSED_OPTIONS.map((option) => option.key));
+
 export const DEFAULT_SETTINGS: Settings = {
   hoverExpand: true,
   clockSeconds: true,
@@ -51,13 +73,25 @@ export const DEFAULT_SETTINGS: Settings = {
     system: true,
     processes: true,
   },
+  collapsed: ["cpu", "memory"],
 };
 
 const STORAGE_KEY = "doter:settings:v1";
 
 /** defaultSettings returns a copy, so callers never mutate the constant. */
 export function defaultSettings(): Settings {
-  return { ...DEFAULT_SETTINGS, cards: { ...DEFAULT_SETTINGS.cards } };
+  return {
+    ...DEFAULT_SETTINGS,
+    cards: { ...DEFAULT_SETTINGS.cards },
+    collapsed: [...DEFAULT_SETTINGS.collapsed],
+  };
+}
+
+function loadCollapsed(value: unknown, fallback: [CollapsedMetric, CollapsedMetric]): [CollapsedMetric, CollapsedMetric] {
+  if (!Array.isArray(value) || value.length !== 2) return [...fallback];
+  const [left, right] = value;
+  if (!COLLAPSED_KEYS.has(left) || !COLLAPSED_KEYS.has(right)) return [...fallback];
+  return [left, right];
 }
 
 /** loadSettings reads the saved preferences, falling back field by field. */
@@ -69,6 +103,7 @@ export function loadSettings(): Settings {
     const saved = JSON.parse(raw) as Partial<Settings> & {
       cards?: Partial<Record<CardKey, boolean>>;
     };
+    const collapsed = "collapsed" in saved ? saved.collapsed : undefined;
     return {
       hoverExpand:
         typeof saved.hoverExpand === "boolean" ? saved.hoverExpand : fallback.hoverExpand,
@@ -82,6 +117,7 @@ export function loadSettings(): Settings {
         },
         { ...fallback.cards },
       ),
+      collapsed: loadCollapsed(collapsed, fallback.collapsed),
     };
   } catch {
     return fallback;

@@ -5,6 +5,7 @@ import * as IslandService from "../bindings/doter/internal/services/islandservic
 import { CollapsedBar } from "./components/CollapsedBar";
 import { ExpandedPanel } from "./components/ExpandedPanel";
 import type { TabId } from "./components/TabBar";
+import { useAgentSessions } from "./hooks/useAgentSessions";
 import { useBackendSettings } from "./hooks/useBackendSettings";
 import { useClock } from "./hooks/useClock";
 import { useSeries } from "./hooks/useSeries";
@@ -19,6 +20,7 @@ const GLASS_DELAY_MS = 200;
 
 function App() {
   const { snapshot, staticInfo } = useSystemInfo();
+  const agents = useAgentSessions();
   const clock = useClock();
 
   const cpuSeries = useSeries(snapshot?.cpu.usage ?? 0, snapshot?.timestamp ?? 0, 48);
@@ -192,7 +194,12 @@ function App() {
         if (!openRef.current) void expand();
       }}
     >
-      <CollapsedBar snapshot={snapshot} />
+      <CollapsedBar
+        snapshot={snapshot}
+        clock={clock}
+        agents={agents.snapshot?.running ?? 0}
+        metrics={settings.collapsed}
+      />
 
       <ExpandedPanel
         snapshot={snapshot}
@@ -212,6 +219,8 @@ function App() {
         onSetAlertsEnabled={backend.setAlertsEnabled}
         onSetClipboardPaused={backend.setClipboardPaused}
         onSetClipboardHotkeyEnabled={backend.setClipboardHotkeyEnabled}
+        onSetAutostart={backend.setAutostart}
+        onSetHideOnFullscreen={backend.setHideOnFullscreen}
       />
     </div>
   );

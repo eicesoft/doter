@@ -1,6 +1,8 @@
 package services
 
 import (
+	"github.com/wailsapp/wails/v3/pkg/application"
+
 	"doter/internal/clipboard"
 	"doter/internal/prefs"
 )
@@ -8,6 +10,7 @@ import (
 // SettingsService exposes the backend preferences that affect behaviour
 // outside the webview: desktop alerts and clipboard capture.
 type SettingsService struct {
+	app             *application.App
 	store           *prefs.Store
 	watcher         *clipboard.Watcher
 	onAlertsEnabled func()
@@ -20,12 +23,14 @@ type SettingsService struct {
 // notification permission. onHotkeyChanged binds or releases the global
 // clipboard shortcut.
 func NewSettingsService(
+	app *application.App,
 	store *prefs.Store,
 	watcher *clipboard.Watcher,
 	onAlertsEnabled func(),
 	onHotkeyChanged func(bool),
 ) *SettingsService {
 	service := &SettingsService{
+		app:             app,
 		store:           store,
 		watcher:         watcher,
 		onAlertsEnabled: onAlertsEnabled,
@@ -67,4 +72,27 @@ func (s *SettingsService) SetClipboardHotkeyEnabled(enabled bool) prefs.Settings
 		s.onHotkeyChanged(enabled)
 	}
 	return settings
+}
+
+// SetAutostart registers or removes the login item. The persisted value is
+// only updated after the platform accepted the change.
+func (s *SettingsService) SetAutostart(enabled bool) (prefs.Settings, error) {
+	if s.app == nil {
+		return s.store.SetAutostart(enabled), nil
+	}
+	var err error
+	if enabled {
+		err = s.app.Autostart.Enable()
+	} else {
+		err = s.app.Autostart.Disable()
+	}
+	if err != nil {
+		return s.store.Get(), err
+	}
+	return s.store.SetAutostart(enabled), nil
+}
+
+// SetHideOnFullscreen toggles hiding the island over fullscreen apps.
+func (s *SettingsService) SetHideOnFullscreen(enabled bool) prefs.Settings {
+	return s.store.SetHideOnFullscreen(enabled)
 }
