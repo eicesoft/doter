@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Entry } from "../../bindings/doter/internal/clipboard/models";
 import { useClipboard } from "../hooks/useClipboard";
@@ -22,6 +22,8 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
   const { entries, loading, search, setSearch, togglePin, remove, clear, copy } =
     useClipboard();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -46,6 +48,23 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
     window.setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1_500);
   };
 
+  const handleListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    setShowScrollTop(el.scrollTop > 200);
+  };
+
+  const scrollToTop = () => {
+    listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    // A filtered list starts at its own top, not wherever the old one sat.
+    listRef.current?.scrollTo({ top: 0 });
+    setShowScrollTop(false);
+  };
+
   return (
     <div className="clipboard-panel">
       <div className="clipboard-toolbar">
@@ -60,7 +79,7 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
             placeholder="搜索剪贴板"
             onPointerEnter={onFocusIsland}
             onPointerDown={onFocusIsland}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => handleSearchChange(event.target.value)}
           />
           {search && (
             <button
@@ -83,7 +102,7 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
         </button>
       </div>
 
-      <div className="clipboard-list">
+      <div className="clipboard-list" ref={listRef} onScroll={handleListScroll}>
         {loading ? (
           <div className="empty-state">
             <span className="power-glyph">⎘</span>
@@ -114,6 +133,21 @@ export function ClipboardPanel({ onFocusIsland }: ClipboardPanelProps) {
           ))
         )}
       </div>
+
+      <button
+        type="button"
+        className="clip-scroll-top"
+        data-visible={showScrollTop ? "true" : "false"}
+        aria-label="回到顶部"
+        aria-hidden={!showScrollTop}
+        tabIndex={showScrollTop ? 0 : -1}
+        onClick={scrollToTop}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 18.5V6" />
+          <path d="M6.4 11.6 12 6l5.6 5.6" />
+        </svg>
+      </button>
     </div>
   );
 }

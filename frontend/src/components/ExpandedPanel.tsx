@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { Snapshot, StaticInfo } from "../../bindings/doter/internal/sysinfo/models";
+import { CARD_KEYS, type Settings } from "../lib/settings";
 import {
   formatBytes,
   formatClock,
@@ -17,7 +18,10 @@ import { Meter, Ring } from "./Ring";
 import { Sparkline } from "./Sparkline";
 import { TabBar, type TabId } from "./TabBar";
 import { ClipboardPanel } from "./ClipboardPanel";
+import { AgentsPanel } from "./AgentsPanel";
+import { MusicPanel } from "./MusicPanel";
 import { WeatherPanel } from "./WeatherPanel";
+import { SettingsPopover } from "./SettingsPopover";
 
 interface ExpandedPanelProps {
   snapshot: Snapshot | null;
@@ -28,6 +32,8 @@ interface ExpandedPanelProps {
   pinned: boolean;
   onTogglePin: () => void;
   onFocusIsland: () => void;
+  settings: Settings;
+  onChangeSettings: (next: Settings) => void;
 }
 
 interface CardProps {
@@ -35,10 +41,13 @@ interface CardProps {
   hint?: string;
   accent: string;
   wide?: boolean;
+  /** Settings can switch a card off without unmounting its siblings. */
+  hidden?: boolean;
   children: ReactNode;
 }
 
-function Card({ label, hint, accent, wide, children }: CardProps) {
+function Card({ label, hint, accent, wide, hidden, children }: CardProps) {
+  if (hidden) return null;
   return (
     <section
       className={wide ? "card card-wide" : "card"}
@@ -72,8 +81,12 @@ export function ExpandedPanel({
   pinned,
   onTogglePin,
   onFocusIsland,
+  settings,
+  onChangeSettings,
 }: ExpandedPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsWrapRef = useRef<HTMLDivElement>(null);
 
   const cpuUsage = snapshot?.cpu.usage ?? 0;
   const perCore = snapshot?.cpu.perCore ?? [];
@@ -95,6 +108,26 @@ export function ExpandedPanel({
   const secondaryDisk = disks[1];
   const netInterface = network?.interfaces?.[0]?.name;
 
+  // Dismiss the popover on an outside press or Esc. Esc is handled in the
+  // capture phase so it closes the popover instead of collapsing the island.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!settingsWrapRef.current?.contains(event.target as Node)) setSettingsOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setSettingsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [settingsOpen]);
+
   return (
     <div className="panel">
       <header className="panel-header">
@@ -110,43 +143,87 @@ export function ExpandedPanel({
 
         <div className="panel-header-right">
           <div className="panel-clock-block">
-            <span className="panel-clock">{formatClock(clock, true)}</span>
+            <span className="panel-clock">{formatClock(clock, settings.clockSeconds)}</span>
             <span className="panel-date">{formatDate(clock)}</span>
           </div>
-          <button
-            type="button"
-            className={pinned ? "pin-button is-on" : "pin-button"}
-            onPointerEnter={onFocusIsland}
-            onPointerDown={(event) => {
-              // Pin on pointerdown: the first click into an inactive window is
-              // consumed by Windows activation, so waiting for `click` loses it.
-              event.preventDefault();
-              event.stopPropagation();
-              onTogglePin();
-            }}
-            title={pinned ? "Unpin dashboard" : "Keep dashboard open"}
-            aria-pressed={pinned}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          <div className="panel-actions" ref={settingsWrapRef}>
+            <button
+              type="button"
+              className={settingsOpen ? "settings-button is-open" : "settings-button"}
+              onPointerEnter={onFocusIsland}
+              onPointerDown={onFocusIsland}
+              onClick={() => setSettingsOpen((value) => !value)}
+              title="设置"
+              aria-label="设置"
+              aria-haspopup="dialog"
+              aria-expanded={settingsOpen}
             >
-              <path d="M9 3h6l-1 6 3.5 3.5h-11L10 9 9 3Z" />
-              <path d="M12 12.5V21" />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 8h7M17 8h3M4 16h3M13 16h7" />
+                <circle cx="14" cy="8" r="2.2" />
+                <circle cx="10" cy="16" r="2.2" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={pinned ? "pin-button is-on" : "pin-button"}
+              onPointerEnter={onFocusIsland}
+              onPointerDown={(event) => {
+                // Pin on pointerdown: the first click into an inactive window is
+                // consumed by Windows activation, so waiting for `click` loses it.
+                event.preventDefault();
+                event.stopPropagation();
+                onTogglePin();
+              }}
+              title={pinned ? "Unpin dashboard" : "Keep dashboard open"}
+              aria-pressed={pinned}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 3h6l-1 6 3.5 3.5h-11L10 9 9 3Z" />
+                <path d="M12 12.5V21" />
+              </svg>
+            </button>
+
+            {settingsOpen && (
+              <SettingsPopover
+                settings={settings}
+                onChange={onChangeSettings}
+                onClose={() => setSettingsOpen(false)}
+              />
+            )}
+          </div>
         </div>
       </header>
 
-      <div className="panel-body" data-tab={activeTab} key={activeTab}>
+      <div
+        className={settings.cards.processes ? "panel-body has-wide" : "panel-body"}
+        data-tab={activeTab}
+        key={activeTab}
+      >
         {activeTab === "overview" && (
           <>
-            <Card label="Processor" hint={shortCPUModel(staticInfo?.cpuModel ?? "")} accent="var(--accent-cpu)">
+            <Card
+              label="Processor"
+              hint={shortCPUModel(staticInfo?.cpuModel ?? "")}
+              accent="var(--accent-cpu)"
+              hidden={!settings.cards.cpu}
+            >
               <div className="cpu-split">
                 <Ring value={cpuUsage} size={62} stroke={5} color="var(--accent-cpu)">
                   <span className="ring-value">
@@ -172,6 +249,7 @@ export function ExpandedPanel({
               label="Memory"
               hint={formatPercent(memory?.usedPercent ?? 0)}
               accent="var(--accent-mem)"
+              hidden={!settings.cards.memory}
             >
               <div className="metric-big">
                 {formatPercent(memory?.usedPercent ?? 0)}
@@ -194,6 +272,7 @@ export function ExpandedPanel({
               label="Storage"
               hint={disks.length > 1 ? `${disks.length} volumes` : primaryDisk?.fstype}
               accent="var(--accent-disk)"
+              hidden={!settings.cards.storage}
             >
               {primaryDisk ? (
                 <div className="disk-list">
@@ -221,6 +300,7 @@ export function ExpandedPanel({
               label="Network"
               hint={netInterface ?? "offline"}
               accent="var(--accent-net)"
+              hidden={!settings.cards.network}
             >
               <div className="net-speeds">
                 <div className="net-speed">
@@ -244,6 +324,7 @@ export function ExpandedPanel({
               label="Power"
               hint={battery ? battery.state : "AC"}
               accent="var(--accent-battery)"
+              hidden={!settings.cards.power}
             >
               {battery ? (
                 <>
@@ -274,7 +355,11 @@ export function ExpandedPanel({
               )}
             </Card>
 
-            <Card label="System" accent="var(--accent-sys)">
+            <Card
+              label="System"
+              accent="var(--accent-sys)"
+              hidden={!settings.cards.system}
+            >
               <div className="facts">
                 <KV label="Uptime" value={formatUptime(snapshot?.uptime ?? 0)} />
                 <KV label="Load 1m" value={load ? load.load1.toFixed(2) : "—"} />
@@ -282,7 +367,13 @@ export function ExpandedPanel({
               </div>
             </Card>
 
-            <Card label="Top processes" hint="CPU · MEM" accent="var(--accent-cpu)" wide>
+            <Card
+              label="Top processes"
+              hint="CPU · MEM"
+              accent="var(--accent-cpu)"
+              wide
+              hidden={!settings.cards.processes}
+            >
               <div className="proc-table">
                 {processes.length === 0 ? (
                   <div className="empty-state">Collecting process data…</div>
@@ -300,7 +391,35 @@ export function ExpandedPanel({
                 )}
               </div>
             </Card>
+
+            {!CARD_KEYS.some((key) => settings.cards[key]) && (
+              <div className="overview-empty">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 8h7M17 8h3M4 16h3M13 16h7" />
+                  <circle cx="14" cy="8" r="2.2" />
+                  <circle cx="10" cy="16" r="2.2" />
+                </svg>
+                <div>
+                  <b>没有启用的指标</b>
+                  <span>在右上角的设置里打开需要的卡片</span>
+                </div>
+              </div>
+            )}
           </>
+        )}
+
+        {activeTab === "agents" && (
+          <Card label="Agents" hint="Claude · Codex" accent="var(--accent-cpu)" wide>
+            <AgentsPanel />
+          </Card>
         )}
 
         {activeTab === "weather" && (
@@ -310,14 +429,8 @@ export function ExpandedPanel({
         )}
 
         {activeTab === "music" && (
-          <Card label="Music" hint="即将上线" accent="var(--accent-net)" wide>
-            <div className="empty-state">
-              <span className="power-glyph">♪</span>
-              <div>
-                <b>Nothing playing</b>
-                <span>音乐控制即将上线</span>
-              </div>
-            </div>
+          <Card label="Music" accent="var(--accent-net)" wide>
+            <MusicPanel />
           </Card>
         )}
 

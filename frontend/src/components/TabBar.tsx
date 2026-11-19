@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-export type TabId = "overview" | "weather" | "music" | "clipboard";
+export type TabId = "overview" | "agents" | "weather" | "music" | "clipboard";
 
 interface TabBarProps {
   active: TabId;
@@ -28,6 +28,16 @@ export function TabBar({ active, onSelect, onFocusIsland }: TabBarProps) {
           <path d="M4.5 18a7.5 7.5 0 1 1 15 0" />
           <path d="M12 14.5 15.5 10" />
           <circle cx="12" cy="15" r="1.4" />
+        </svg>
+      ),
+    },
+    {
+      id: "agents",
+      label: "Agent 监控",
+      icon: (
+        <svg viewBox="0 0 24 24" {...strokeProps}>
+          <rect x="3.5" y="4.5" width="17" height="15" rx="3.5" />
+          <path d="M7.5 9 10 11.5 7.5 14M12.5 15h4" />
         </svg>
       ),
     },

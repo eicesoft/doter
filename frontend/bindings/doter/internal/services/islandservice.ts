@@ -47,6 +47,14 @@ export function SetExpanded(expanded: boolean): $CancellablePromise<boolean> {
 }
 
 /**
+ * SetGlassVisible fades the native frosted layer without resizing the window,
+ * so it does not linger over the shrinking island.
+ */
+export function SetGlassVisible(visible: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1531749564, visible);
+}
+
+/**
  * Show reveals the island.
  */
 export function Show(): $CancellablePromise<void> {

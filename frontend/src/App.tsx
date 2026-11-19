@@ -7,9 +7,13 @@ import { ExpandedPanel } from "./components/ExpandedPanel";
 import { useClock } from "./hooks/useClock";
 import { useSeries } from "./hooks/useSeries";
 import { useSystemInfo } from "./hooks/useSystemInfo";
+import { loadSettings, saveSettings, type Settings } from "./lib/settings";
 
 /** Wait for the collapse transition before shrinking the native window. */
 const COLLAPSE_DELAY_MS = 460;
+
+/** Let the island grow most of the way before the native frost fades in. */
+const GLASS_DELAY_MS = 200;
 
 function App() {
   const { snapshot, staticInfo } = useSystemInfo();
@@ -19,11 +23,29 @@ function App() {
   const netSeries = useSeries(snapshot?.network.downSpeed ?? 0, snapshot?.timestamp ?? 0, 48);
 
   const [open, setOpen] = useState(false);
+  // Drives the island's opaque backdrop: it only turns transparent once the
+  // native frost is on screen, so the panel never looks half-finished.
+  const [glassOn, setGlassOn] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+
+  // Preferences live in the webview: they only affect presentation, and the
+  // dashboard must still come up if storage is unavailable.
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
 
   const openRef = useRef(false);
   const pinnedRef = useRef(false);
   const collapseTimer = useRef<number | null>(null);
+  const glassTimer = useRef<number | null>(null);
+
+  const clearGlassTimer = useCallback(() => {
+    if (glassTimer.current !== null) {
+      window.clearTimeout(glassTimer.current);
+      glassTimer.current = null;
+    }
+  }, []);
 
   const expand = useCallback(() => {
     if (collapseTimer.current !== null) {
@@ -38,7 +60,20 @@ function App() {
     openRef.current = true;
     setOpen(true);
     IslandService.SetExpanded(true).catch(() => {});
-  }, []);
+
+    // Reveal the native frost only once the island has nearly finished growing:
+    // the native layer covers the whole expanded island, so showing it up front
+    // would paint over space the island has not reached yet.
+    clearGlassTimer();
+    glassTimer.current = window.setTimeout(() => {
+      glassTimer.current = null;
+      if (openRef.current) {
+        // The native layer is up: drop the opaque backdrop so the blur shows.
+        setGlassOn(true);
+        IslandService.SetGlassVisible(true).catch(() => {});
+      }
+    }, GLASS_DELAY_MS);
+  }, [clearGlassTimer]);
 
   const collapse = useCallback((force = false) => {
     if (!openRef.current) return;
@@ -51,6 +86,11 @@ function App() {
 
     openRef.current = false;
     setOpen(false);
+    setGlassOn(false);
+    clearGlassTimer();
+    // Hide the native glass the moment the island starts shrinking; the
+    // window itself only resizes once the animation has finished.
+    IslandService.SetGlassVisible(false).catch(() => {});
 
     if (collapseTimer.current !== null) window.clearTimeout(collapseTimer.current);
     collapseTimer.current = window.setTimeout(() => {
@@ -59,7 +99,7 @@ function App() {
         IslandService.SetExpanded(false).catch(() => {});
       }
     }, COLLAPSE_DELAY_MS);
-  }, []);
+  }, [clearGlassTimer]);
 
   const togglePin = useCallback(() => {
     const next = !pinnedRef.current;
@@ -94,7 +134,7 @@ function App() {
         leaveTimer = null;
       }
       if (event.data === true) {
-        expand();
+        if (settings.hoverExpand) expand();
         return;
       }
       // Resizing the window on expand can bounce the tracking area; this delay
@@ -109,7 +149,7 @@ function App() {
       if (leaveTimer !== null) window.clearTimeout(leaveTimer);
       unsubscribe();
     };
-  }, [expand, collapse]);
+  }, [expand, collapse, settings.hoverExpand]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -125,7 +165,10 @@ function App() {
     <div
       className="island"
       data-open={open}
-      onMouseEnter={() => void expand()}
+      data-glass={glassOn}
+      onMouseEnter={() => {
+        if (settings.hoverExpand) void expand();
+      }}
       onMouseLeave={() => collapse()}
       onClick={() => {
         if (!openRef.current) void expand();
@@ -142,6 +185,8 @@ function App() {
         pinned={pinned}
         onTogglePin={togglePin}
         onFocusIsland={focusIsland}
+        settings={settings}
+        onChangeSettings={setSettings}
       />
     </div>
   );

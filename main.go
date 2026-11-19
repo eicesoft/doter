@@ -10,6 +10,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
+	"doter/internal/agents"
 	"doter/internal/clipboard"
 	"doter/internal/notch"
 	"doter/internal/services"
@@ -34,6 +35,8 @@ func init() {
 	application.RegisterEvent[sysinfo.Snapshot](services.EventSnapshot)
 	// The same for `clipboard:update`.
 	application.RegisterEvent[clipboard.Entry](services.EventClipboard)
+	// And for `agents:update`, the Claude/Codex monitor.
+	application.RegisterEvent[agents.Snapshot](services.EventAgents)
 }
 
 func main() {
@@ -77,6 +80,10 @@ func main() {
 
 	weatherClient := weather.NewClient(weatherLocationPath())
 	app.RegisterService(application.NewService(services.NewWeatherService(weatherClient)))
+	app.RegisterService(application.NewService(services.NewMusicService(app)))
+
+	agentMonitor := agents.NewMonitor()
+	app.RegisterService(application.NewService(services.NewAgentsService(agentMonitor)))
 
 	tray := app.SystemTray.New()
 	tray.SetTooltip("Doter — system monitor")
@@ -97,6 +104,8 @@ func main() {
 		go pumpSnapshots(app, sampler)
 		clipboardWatcher.Start(context.Background())
 		go pumpClipboard(app, clipboardWatcher)
+		agentMonitor.Start(context.Background())
+		go pumpAgents(app, agentMonitor)
 	})
 
 	if err := app.Run(); err != nil {
@@ -148,5 +157,12 @@ func pumpSnapshots(app *application.App, sampler *sysinfo.Sampler) {
 func pumpClipboard(app *application.App, watcher *clipboard.Watcher) {
 	for entry := range watcher.Updates() {
 		app.Event.Emit(services.EventClipboard, entry)
+	}
+}
+
+// pumpAgents forwards agent session snapshots to the frontend.
+func pumpAgents(app *application.App, monitor *agents.Monitor) {
+	for snapshot := range monitor.Updates() {
+		app.Event.Emit(services.EventAgents, snapshot)
 	}
 }

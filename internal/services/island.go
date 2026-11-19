@@ -23,6 +23,10 @@ func (s *IslandService) SetExpanded(expanded bool) bool {
 	return s.ctrl.Expanded()
 }
 
+// SetGlassVisible fades the native frosted layer without resizing the window,
+// so it does not linger over the shrinking island.
+func (s *IslandService) SetGlassVisible(visible bool) { s.ctrl.SetGlassVisible(visible) }
+
 // ToggleExpanded flips the window size and returns the new state.
 func (s *IslandService) ToggleExpanded() bool {
 	return s.ctrl.ToggleExpanded()

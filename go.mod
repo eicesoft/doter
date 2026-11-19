@@ -6,6 +6,7 @@ require (
 	github.com/distatus/battery v0.11.0
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/wailsapp/wails/v3 v3.1.0
+	github.com/xiaowumin-mark/smtc-suite-go v0.2.0
 )
 
 require (

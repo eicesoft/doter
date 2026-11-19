@@ -181,6 +181,13 @@ func (c *Controller) SetExpanded(expanded bool) {
 	c.applyFrame()
 }
 
+// SetGlassVisible shows or hides the native vibrancy layer. The frontend owns
+// the timing: the layer is only revealed once the island has finished growing,
+// and hidden the moment a collapse starts, so it never covers empty space.
+func (c *Controller) SetGlassVisible(visible bool) {
+	setNativeGlass(c.win.NativeWindow(), visible)
+}
+
 // ToggleExpanded flips the expansion state and reports the new value.
 func (c *Controller) ToggleExpanded() bool {
 	c.mu.Lock()
@@ -189,6 +196,9 @@ func (c *Controller) ToggleExpanded() bool {
 	c.mu.Unlock()
 
 	c.applyFrame()
+	// The glass layer covers the whole island, so it can come back with the
+	// window rather than waiting for the frontend.
+	setNativeGlass(c.win.NativeWindow(), expanded)
 	return expanded
 }
 

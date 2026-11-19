@@ -23,8 +23,10 @@
 - 电池电量、充电状态、剩余时间（无电池时显示 AC）
 - 系统运行时长、Load Average、架构
 - CPU 占用最高的进程列表
+- 音乐页：系统 Now Playing 的封面、曲名、歌手、专辑与进度，支持播放/暂停、上一首/下一首、拖拽进度、随机/循环（按播放器能力显示）
+- Agent 页：监控 Claude Code / Codex CLI 会话，显示运行/等待/结束状态、项目、模型、分支、轮次与累计 / 上下文 token
 
-点击右上角图钉可保持展开，`Esc` 收起。托盘菜单可显示 / 隐藏、退出；全局快捷键 `Ctrl+Shift+D` 切换显示 / 隐藏。
+点击右上角图钉可保持展开，`Esc` 收起。图钉左侧的设置按钮可开关指标卡片、悬停展开与时钟秒数，偏好保存在本机。托盘菜单可显示 / 隐藏、退出；全局快捷键 `Ctrl+Shift+D` 切换显示 / 隐藏。
 
 ## 目录结构
 
@@ -35,14 +37,26 @@ internal/
   services/
     system.go               SystemService：快照 + 静态信息绑定
     island.go               IslandService：窗口展开/隐藏/退出绑定
+    music.go                MusicService：媒体快照、传输控制、事件推送
+    agents.go               AgentsService：Claude/Codex 会话快照绑定
+  agents/
+    monitor.go              发现近 24h 会话、匹配运行中的 CLI 进程、聚合快照
+    claude.go               ~/.claude/projects 日志增量解析
+    codex.go                ~/.codex/sessions rollout 日志增量解析
+  music/
+    player.go               平台媒体适配器接口
+    player_darwin.go        macOS：内嵌 mediaremote-adapter，首次运行解压到缓存
+    player_windows.go       Windows：SMTC（smtc-suite-go）
+    player_unsupported.go   其余平台：返回明确的不支持状态
+    assets/                 内嵌的 MediaRemote 适配器与许可
   sysinfo/
     types.go                前后端共享的数据结构
     sampler.go              每秒采样、5 秒磁盘/进程、10 秒电池
 frontend/
   src/
     App.tsx                 悬停展开、图钉、Esc 收起
-    components/             CollapsedBar / ExpandedPanel / Ring / Sparkline
-    hooks/                  useSystemInfo / useSeries / useClock
+    components/             CollapsedBar / ExpandedPanel / MusicPanel / AgentsPanel / Ring / Sparkline
+    hooks/                  useSystemInfo / useSeries / useClock / useMusic / useAgentSessions
     lib/format.ts           字节、速率、时长等格式化
   bindings/                 Wails 自动生成的 TypeScript 绑定（勿手改）
 build/                      各平台打包配置与图标
@@ -79,9 +93,20 @@ wails3 build
 
 Wails v3.1 自带的 `NewNotchWindow`（真实 macOS 摄像头刘海开窗）尺寸固定、无法在展开时调整，因此这里使用可动态调整的自定义面板窗口；在带刘海的 MacBook 上窗口位于菜单栏下方，避免被摄像头区域遮挡。
 
+## 媒体读取
+
+音乐页只读取系统级的 Now Playing 会话，不直接对接具体播放器。
+
+| 平台 | 实现 | 说明 |
+| --- | --- | --- |
+| macOS | [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter)（BSD-3-Clause） | 预编译的 universal framework + perl 脚本内嵌在二进制中，第一次打开音乐页时解压到 `~/Library/Caches/doter/mediaremote-adapter/<version>`。macOS 15.4 起直接调用 MediaRemote 会被拒绝，这里借 `/usr/bin/perl` 的 Apple 签名标识继续读取系统会话，因此没有自动化授权弹窗。 |
+| Windows | [smtc-suite-go](https://github.com/xiaowumin-mark/smtc-suite-go)（MIT） | 通过 WinRT SMTC 读取当前媒体会话，需 CGO。 |
+| Linux | — | 暂不支持，音乐页显示明确的空态。 |
+
+适配器按面板生命周期启停：打开音乐页时启动，全部离开后 20 秒停止；应用退出时由 `ServiceShutdown` 终止辅助进程。
+
 ## 后续可扩展
 
 - 采样指标（风扇、温度、GPU）接入 `internal/sysinfo`
 - 多显示器选择 / 拖动吸附
 - 透明区域点击穿透（Windows `WM_NCHITTEST` / macOS `hitTest`）
-- 设置面板与指标开关

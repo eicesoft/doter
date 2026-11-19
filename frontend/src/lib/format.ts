@@ -102,6 +102,21 @@ export function shortCPUModel(model: string): string {
     .trim();
 }
 
+/** Compact token count: 940, 12.3k, 1.2M. */
+export function formatTokens(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value < 1000) return String(Math.round(value));
+  const units = ["k", "M", "B"];
+  let scaled = value;
+  let unit = -1;
+  while (scaled >= 1000 && unit < units.length - 1) {
+    scaled /= 1000;
+    unit++;
+  }
+  const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+  return `${scaled.toFixed(digits)}${units[unit]}`;
+}
+
 /** Relative time for clipboard entries: 刚刚, 5 分钟前, 昨天, 11-08. */
 export function formatRelTime(timestamp: number, now: number = Date.now()): string {
   if (!Number.isFinite(timestamp) || timestamp <= 0) return "—";
