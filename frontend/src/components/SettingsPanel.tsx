@@ -6,10 +6,12 @@ import { Check, Version } from "../../bindings/doter/internal/services/updateser
 import {
   CARD_OPTIONS,
   COLLAPSED_OPTIONS,
+  TAB_OPTIONS,
   defaultSettings,
   type CardKey,
   type CollapsedMetric,
   type Settings,
+  type TabKey,
 } from "../lib/settings";
 
 interface SettingsPanelProps {
@@ -68,6 +70,10 @@ export function SettingsPanel({
     ];
     collapsed[index] = metric;
     onChange({ ...settings, collapsed });
+  };
+  const setTabVisible = (key: TabKey, value: boolean) => {
+    if (key === "agents") return;
+    onChange({ ...settings, tabs: { ...settings.tabs, [key]: value } });
   };
 
   useEffect(() => {
@@ -148,6 +154,22 @@ export function SettingsPanel({
                 />
                 <div className="settings-note">
                   两个指标位可重复，默认 CPU 与天气。
+                </div>
+              </Group>
+
+              <Group title="显示页签">
+                {TAB_OPTIONS.map((option) => (
+                  <ToggleRow
+                    key={option.key}
+                    label={option.label}
+                    accent={option.accent}
+                    checked={settings.tabs[option.key]}
+                    locked={option.locked}
+                    onChange={(value) => setTabVisible(option.key, value)}
+                  />
+                ))}
+                <div className="settings-note">
+                  「Agent 监控」始终显示，不能关闭。
                 </div>
               </Group>
             </div>
@@ -303,6 +325,7 @@ interface ToggleRowProps {
   label: string;
   checked: boolean;
   accent?: string;
+  locked?: boolean;
   onChange: (value: boolean) => void;
 }
 
@@ -330,12 +353,13 @@ function SelectRow({ label, value, onChange }: SelectRowProps) {
   );
 }
 
-function ToggleRow({ label, checked, accent, onChange }: ToggleRowProps) {
+function ToggleRow({ label, checked, accent, locked, onChange }: ToggleRowProps) {
   return (
-    <label className="settings-row">
+    <label className={locked ? "settings-row is-locked" : "settings-row"} title={locked ? "此项始终开启" : undefined}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={locked}
         onChange={(event) => onChange(event.target.checked)}
       />
       <span className="settings-row-label">

@@ -9,6 +9,9 @@ export type CardKey =
   | "system"
   | "processes";
 
+/** Pages of the expanded dashboard; matches the bottom tab bar order. */
+export type TabKey = "overview" | "calendar" | "clipboard" | "weather" | "music" | "agents";
+
 /** The two metrics shown in the idle pill. */
 export type CollapsedMetric =
   | "cpu"
@@ -28,7 +31,26 @@ export interface Settings {
   cards: Record<CardKey, boolean>;
   /** Left and right pill metrics. */
   collapsed: [CollapsedMetric, CollapsedMetric];
+  /** Pages shown in the bottom tab bar. Agents is always on. */
+  tabs: Record<TabKey, boolean>;
 }
+
+/** Tab rows in tab-bar order; `locked` tabs cannot be hidden. */
+export const TAB_OPTIONS: readonly {
+  key: TabKey;
+  label: string;
+  accent: string;
+  locked?: boolean;
+}[] = [
+  { key: "overview", label: "系统总览", accent: "var(--accent-cpu)" },
+  { key: "calendar", label: "日历", accent: "var(--accent-sys)" },
+  { key: "clipboard", label: "剪切板", accent: "var(--accent-disk)" },
+  { key: "weather", label: "天气", accent: "var(--accent-net)" },
+  { key: "music", label: "音乐", accent: "var(--accent-net)" },
+  { key: "agents", label: "Agent 监控", accent: "var(--accent-cpu)", locked: true },
+];
+
+const TAB_KEYS: readonly TabKey[] = TAB_OPTIONS.map((option) => option.key);
 
 export const CARD_KEYS: readonly CardKey[] = [
   "cpu",
@@ -76,6 +98,14 @@ export const DEFAULT_SETTINGS: Settings = {
     processes: true,
   },
   collapsed: ["cpu", "weather"],
+  tabs: {
+    overview: true,
+    calendar: true,
+    clipboard: true,
+    weather: true,
+    music: true,
+    agents: true,
+  },
 };
 
 const STORAGE_KEY = "doter:settings:v1";
@@ -86,6 +116,7 @@ export function defaultSettings(): Settings {
     ...DEFAULT_SETTINGS,
     cards: { ...DEFAULT_SETTINGS.cards },
     collapsed: [...DEFAULT_SETTINGS.collapsed],
+    tabs: { ...DEFAULT_SETTINGS.tabs },
   };
 }
 
@@ -104,6 +135,7 @@ export function loadSettings(): Settings {
     if (!raw) return fallback;
     const saved = JSON.parse(raw) as Partial<Settings> & {
       cards?: Partial<Record<CardKey, boolean>>;
+      tabs?: Partial<Record<TabKey, boolean>>;
     };
     const collapsed = "collapsed" in saved ? saved.collapsed : undefined;
     return {
@@ -120,6 +152,16 @@ export function loadSettings(): Settings {
         { ...fallback.cards },
       ),
       collapsed: loadCollapsed(collapsed, fallback.collapsed),
+      tabs: TAB_KEYS.reduce(
+        (tabs, key) => {
+          const value = saved.tabs?.[key];
+          // The agents tab is the monitoring surface and stays available even
+          // if an old or hand-edited file turned it off.
+          tabs[key] = key === "agents" ? true : typeof value === "boolean" ? value : fallback.tabs[key];
+          return tabs;
+        },
+        { ...fallback.tabs },
+      ),
     };
   } catch {
     return fallback;

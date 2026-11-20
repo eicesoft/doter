@@ -1,12 +1,14 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 
-export type TabId = "overview" | "calendar" | "agents" | "weather" | "music" | "clipboard";
+import type { TabKey } from "../lib/settings";
 
 interface TabBarProps {
-  active: TabId;
-  onSelect: (id: TabId) => void;
+  active: TabKey;
+  onSelect: (id: TabKey) => void;
   onFocusIsland: () => void;
+  /** Pages the user kept enabled in settings. */
+  enabled: Record<TabKey, boolean>;
   /** The weather tab takes the current sky's colour while it is active. */
   weatherAccent?: string;
 }
@@ -21,8 +23,8 @@ const strokeProps = {
 };
 
 /** Circular glass tab bar at the bottom of the expanded island. */
-export function TabBar({ active, onSelect, onFocusIsland, weatherAccent }: TabBarProps) {
-  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+export function TabBar({ active, onSelect, onFocusIsland, enabled, weatherAccent }: TabBarProps) {
+  const allTabs: { id: TabKey; label: string; icon: React.ReactNode }[] = [
     {
       id: "overview",
       label: "系统总览",
@@ -95,7 +97,11 @@ export function TabBar({ active, onSelect, onFocusIsland, weatherAccent }: TabBa
     },
   ];
 
-  const activeIndex = tabs.findIndex((tab) => tab.id === active);
+  const tabs = allTabs.filter((tab) => enabled[tab.id]);
+  const activeIndex = Math.max(
+    tabs.findIndex((tab) => tab.id === active),
+    0,
+  );
 
   // One random glass recipe per app run: the rim angle, the sheen clusters and
   // the turbulence seeds all shift, so the highlights never repeat exactly.

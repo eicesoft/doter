@@ -8,7 +8,7 @@ import {
   RevealProcess,
   SearchProcesses,
 } from "../../bindings/doter/internal/services/systemservice";
-import { CARD_KEYS, type Settings } from "../lib/settings";
+import { CARD_KEYS, type Settings, type TabKey } from "../lib/settings";
 import type { WeatherController } from "../hooks/useWeather";
 import {
   formatBytes,
@@ -25,7 +25,7 @@ import {
 import { Meter, Ring } from "./Ring";
 import { Card } from "./Card";
 import { Sparkline } from "./Sparkline";
-import { TabBar, type TabId } from "./TabBar";
+import { TabBar } from "./TabBar";
 import { CalendarPanel } from "./CalendarPanel";
 import { ClipboardPanel } from "./ClipboardPanel";
 import { AgentsPanel } from "./AgentsPanel";
@@ -45,8 +45,8 @@ interface ExpandedPanelProps {
   onTogglePin: () => void;
   onFocusIsland: () => void;
   onDismiss: () => void;
-  activeTab: TabId;
-  onSelectTab: (id: TabId) => void;
+  activeTab: TabKey;
+  onSelectTab: (id: TabKey) => void;
   settings: Settings;
   onChangeSettings: (next: Settings) => void;
   backendSettings: BackendSettings;
@@ -663,6 +663,7 @@ export function ExpandedPanel({
         active={activeTab}
         onSelect={onSelectTab}
         onFocusIsland={onFocusIsland}
+        enabled={settings.tabs}
         weatherAccent={wxAccent}
       />
     </div>

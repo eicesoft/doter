@@ -603,6 +603,23 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* Locked rows stay visible but do not respond to hover or clicks. */
+.settings-row.is-locked {
+  cursor: default;
+}
+
+.settings-row.is-locked:hover {
+  background: transparent;
+}
+
+.settings-row.is-locked .settings-row-label {
+  color: var(--dim);
+}
+
+.settings-row.is-locked .settings-switch {
+  opacity: 0.55;
+}
+
 .settings-row input {
   position: absolute;
   width: 1px;

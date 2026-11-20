@@ -4,14 +4,13 @@ import { Events } from "@wailsio/runtime";
 import * as IslandService from "../bindings/doter/internal/services/islandservice";
 import { CollapsedBar } from "./components/CollapsedBar";
 import { ExpandedPanel } from "./components/ExpandedPanel";
-import type { TabId } from "./components/TabBar";
 import { useAgentSessions } from "./hooks/useAgentSessions";
 import { useBackendSettings } from "./hooks/useBackendSettings";
 import { useClock } from "./hooks/useClock";
 import { useSeries } from "./hooks/useSeries";
 import { useSystemInfo } from "./hooks/useSystemInfo";
 import { useWeather } from "./hooks/useWeather";
-import { loadSettings, saveSettings, type Settings } from "./lib/settings";
+import { TAB_OPTIONS, loadSettings, saveSettings, type Settings, type TabKey } from "./lib/settings";
 
 /** Wait for the collapse transition before shrinking the native window. */
 const COLLAPSE_DELAY_MS = 460;
@@ -33,7 +32,7 @@ function App() {
   // native frost is on screen, so the panel never looks half-finished.
   const [glassOn, setGlassOn] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const backend = useBackendSettings();
 
@@ -42,6 +41,14 @@ function App() {
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
+
+  // Keep the dashboard on a page that is still enabled; disabling the current
+  // tab lands on the first visible one (Agent monitoring always stays on).
+  const fallbackTab: TabKey =
+    TAB_OPTIONS.find((option) => settings.tabs[option.key])?.key ?? "agents";
+  useEffect(() => {
+    if (!settings.tabs[activeTab]) setActiveTab(fallbackTab);
+  }, [activeTab, fallbackTab, settings.tabs]);
 
   const openRef = useRef(false);
   const pinnedRef = useRef(false);
@@ -175,15 +182,15 @@ function App() {
     // A global shortcut or a notification click asks the native side to
     // reveal the island; this is the half that pins it and switches tabs.
     const unsubscribe = Events.On("island:open-tab", (event) => {
-      const tab = event.data as TabId;
+      const tab = event.data as TabKey;
       if (!tab) return;
-      setActiveTab(tab);
+      setActiveTab(settings.tabs[tab] ? tab : fallbackTab);
       pinnedRef.current = true;
       setPinned(true);
       expand();
     });
     return () => unsubscribe();
-  }, [expand]);
+  }, [expand, fallbackTab, settings.tabs]);
 
   return (
     <div
