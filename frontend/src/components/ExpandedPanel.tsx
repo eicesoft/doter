@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { Settings as BackendSettings } from "../../bindings/doter/internal/prefs/models";
 import type { ProcessStats, Snapshot, StaticInfo } from "../../bindings/doter/internal/sysinfo/models";
@@ -9,6 +9,7 @@ import {
   SearchProcesses,
 } from "../../bindings/doter/internal/services/systemservice";
 import { CARD_KEYS, type Settings } from "../lib/settings";
+import type { WeatherController } from "../hooks/useWeather";
 import {
   formatBytes,
   formatBytesCompact,
@@ -22,13 +23,16 @@ import {
   shortCPUModel,
 } from "../lib/format";
 import { Meter, Ring } from "./Ring";
+import { Card } from "./Card";
 import { Sparkline } from "./Sparkline";
 import { TabBar, type TabId } from "./TabBar";
+import { CalendarPanel } from "./CalendarPanel";
 import { ClipboardPanel } from "./ClipboardPanel";
 import { AgentsPanel } from "./AgentsPanel";
 import { MusicPanel } from "./MusicPanel";
 import { WeatherPanel } from "./WeatherPanel";
-import { SettingsPopover } from "./SettingsPopover";
+import { weatherAccent } from "./WeatherIcon";
+import { SettingsPanel } from "./SettingsPanel";
 
 interface ExpandedPanelProps {
   snapshot: Snapshot | null;
@@ -36,6 +40,7 @@ interface ExpandedPanelProps {
   cpuSeries: number[];
   netSeries: number[];
   clock: Date;
+  weather: WeatherController;
   pinned: boolean;
   onTogglePin: () => void;
   onFocusIsland: () => void;
@@ -48,40 +53,13 @@ interface ExpandedPanelProps {
   onSetAlertsEnabled: (enabled: boolean) => void;
   onSetClipboardPaused: (paused: boolean) => void;
   onSetClipboardHotkeyEnabled: (enabled: boolean) => void;
+  onSetClipboardHistoryLimit: (limit: number) => void;
+  onSetClipboardPreviewBytes: (bytes: number) => void;
+  onSetClipboardImageMaxBytes: (bytes: number) => void;
+  onSetClipboardAutoPaste: (enabled: boolean) => void;
+  onSetClipboardExcludedApps: (apps: string[]) => void;
   onSetAutostart: (enabled: boolean) => void;
   onSetHideOnFullscreen: (enabled: boolean) => void;
-}
-
-interface CardProps {
-  label: string;
-  hint?: string;
-  /** Interactive controls rendered at the card's top-right corner. */
-  actions?: ReactNode;
-  accent: string;
-  wide?: boolean;
-  /** Settings can switch a card off without unmounting its siblings. */
-  hidden?: boolean;
-  children: ReactNode;
-}
-
-function Card({ label, hint, actions, accent, wide, hidden, children }: CardProps) {
-  if (hidden) return null;
-  return (
-    <section
-      className={wide ? "card card-wide" : "card"}
-      style={{ "--accent": accent } as CSSProperties}
-    >
-      <div className="card-head">
-        <span className="card-label">{label}</span>
-        {actions ? (
-          <div className="card-actions">{actions}</div>
-        ) : (
-          hint && <span className="card-hint">{hint}</span>
-        )}
-      </div>
-      <div className="card-body">{children}</div>
-    </section>
-  );
 }
 
 function KV({ label, value }: { label: string; value: ReactNode }) {
@@ -100,6 +78,7 @@ export function ExpandedPanel({
   cpuSeries,
   netSeries,
   clock,
+  weather,
   pinned,
   onTogglePin,
   onFocusIsland,
@@ -112,6 +91,11 @@ export function ExpandedPanel({
   onSetAlertsEnabled,
   onSetClipboardPaused,
   onSetClipboardHotkeyEnabled,
+  onSetClipboardHistoryLimit,
+  onSetClipboardPreviewBytes,
+  onSetClipboardImageMaxBytes,
+  onSetClipboardAutoPaste,
+  onSetClipboardExcludedApps,
   onSetAutostart,
   onSetHideOnFullscreen,
 }: ExpandedPanelProps) {
@@ -121,7 +105,6 @@ export function ExpandedPanel({
   const [confirmKill, setConfirmKill] = useState<number | null>(null);
   const [procError, setProcError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsWrapRef = useRef<HTMLDivElement>(null);
 
   const cpuUsage = snapshot?.cpu.usage ?? 0;
   const perCore = snapshot?.cpu.perCore ?? [];
@@ -209,25 +192,23 @@ export function ExpandedPanel({
   const primaryDisk = disks[0];
   const secondaryDisk = disks[1];
   const netInterface = network?.interfaces?.[0]?.name;
+  // The weather tab is tinted by the weather itself; without a forecast it
+  // falls back to the network accent it used before.
+  const wxAccent = weather.forecast
+    ? weatherAccent(weather.forecast.current.code, !weather.forecast.current.isDay)
+    : "var(--accent-net)";
 
-  // Dismiss the popover on an outside press or Esc. Esc is handled in the
-  // capture phase so it closes the popover instead of collapsing the island.
+  // Esc closes the settings sheet instead of collapsing the island; the panel
+  // has its own close button, so no outside-press dismissal is needed.
   useEffect(() => {
     if (!settingsOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!settingsWrapRef.current?.contains(event.target as Node)) setSettingsOpen(false);
-    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
       setSettingsOpen(false);
     };
-    document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown, true);
-    };
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [settingsOpen]);
 
   return (
@@ -248,7 +229,7 @@ export function ExpandedPanel({
             <span className="panel-clock">{formatClock(clock, settings.clockSeconds)}</span>
             <span className="panel-date">{formatDate(clock)}</span>
           </div>
-          <div className="panel-actions" ref={settingsWrapRef}>
+          <div className="panel-actions">
             <button
               type="button"
               className={settingsOpen ? "settings-button is-open" : "settings-button"}
@@ -301,23 +282,28 @@ export function ExpandedPanel({
                 <path d="M12 12.5V21" />
               </svg>
             </button>
-
-            {settingsOpen && (
-              <SettingsPopover
-                settings={settings}
-                onChange={onChangeSettings}
-                backendSettings={backendSettings}
-                onSetAlertsEnabled={onSetAlertsEnabled}
-                onSetClipboardPaused={onSetClipboardPaused}
-                onSetClipboardHotkeyEnabled={onSetClipboardHotkeyEnabled}
-                onSetAutostart={onSetAutostart}
-                onSetHideOnFullscreen={onSetHideOnFullscreen}
-                onClose={() => setSettingsOpen(false)}
-              />
-            )}
           </div>
         </div>
       </header>
+
+      {settingsOpen && (
+        <SettingsPanel
+          settings={settings}
+          onChange={onChangeSettings}
+          backendSettings={backendSettings}
+          onSetAlertsEnabled={onSetAlertsEnabled}
+          onSetClipboardPaused={onSetClipboardPaused}
+          onSetClipboardHotkeyEnabled={onSetClipboardHotkeyEnabled}
+          onSetClipboardHistoryLimit={onSetClipboardHistoryLimit}
+          onSetClipboardPreviewBytes={onSetClipboardPreviewBytes}
+          onSetClipboardImageMaxBytes={onSetClipboardImageMaxBytes}
+          onSetClipboardAutoPaste={onSetClipboardAutoPaste}
+          onSetClipboardExcludedApps={onSetClipboardExcludedApps}
+          onSetAutostart={onSetAutostart}
+          onSetHideOnFullscreen={onSetHideOnFullscreen}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
 
       <div
         className={settings.cards.processes ? "panel-body has-wide" : "panel-body"}
@@ -480,6 +466,38 @@ export function ExpandedPanel({
               accent="var(--accent-cpu)"
               wide
               hidden={!settings.cards.processes}
+              inline={
+                <div className="proc-search">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  >
+                    <circle cx="11" cy="11" r="6.5" />
+                    <path d="M16 16l4.5 4.5" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={procQuery}
+                    placeholder="搜索进程名或路径"
+                    onPointerEnter={onFocusIsland}
+                    onPointerDown={onFocusIsland}
+                    onChange={(event) => setProcQuery(event.target.value)}
+                  />
+                  {procQuery && (
+                    <button
+                      type="button"
+                      className="proc-search-clear"
+                      onClick={() => setProcQuery("")}
+                      aria-label="清除搜索"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              }
               actions={
                 <div className="proc-sort" role="group" aria-label="进程排序">
                   <button
@@ -506,37 +524,6 @@ export function ExpandedPanel({
                 </div>
               }
             >
-              <div className="proc-search">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                >
-                  <circle cx="11" cy="11" r="6.5" />
-                  <path d="M16 16l4.5 4.5" />
-                </svg>
-                <input
-                  type="text"
-                  value={procQuery}
-                  placeholder="搜索进程名或路径"
-                  onPointerEnter={onFocusIsland}
-                  onPointerDown={onFocusIsland}
-                  onChange={(event) => setProcQuery(event.target.value)}
-                />
-                {procQuery && (
-                  <button
-                    type="button"
-                    className="proc-search-clear"
-                    onClick={() => setProcQuery("")}
-                    aria-label="清除搜索"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-
               {procError && <div className="proc-error">{procError}</div>}
 
               <div className="proc-table">
@@ -641,15 +628,21 @@ export function ExpandedPanel({
           </>
         )}
 
-        {activeTab === "agents" && (
-          <Card label="Agents" hint="Claude · Codex" accent="var(--accent-cpu)" wide>
-            <AgentsPanel />
-          </Card>
+        {activeTab === "calendar" && <CalendarPanel />}
+
+        {activeTab === "clipboard" && (
+          <ClipboardPanel
+            onFocusIsland={onFocusIsland}
+            paused={backendSettings.clipboardPaused}
+            onTogglePause={() => onSetClipboardPaused(!backendSettings.clipboardPaused)}
+            autoPaste={backendSettings.clipboardAutoPaste}
+            onDismiss={onDismiss}
+          />
         )}
 
         {activeTab === "weather" && (
-          <Card label="Weather" accent="var(--accent-net)" wide>
-            <WeatherPanel onFocusIsland={onFocusIsland} />
+          <Card label="Weather" accent={wxAccent} wide>
+            <WeatherPanel weather={weather} onFocusIsland={onFocusIsland} />
           </Card>
         )}
 
@@ -659,19 +652,19 @@ export function ExpandedPanel({
           </Card>
         )}
 
-        {activeTab === "clipboard" && (
-          <Card label="Clipboard" accent="var(--accent-disk)" wide>
-            <ClipboardPanel
-              onFocusIsland={onFocusIsland}
-              paused={backendSettings.clipboardPaused}
-              onTogglePause={() => onSetClipboardPaused(!backendSettings.clipboardPaused)}
-              onDismiss={onDismiss}
-            />
+        {activeTab === "agents" && (
+          <Card label="Agents" hint="Claude · Codex" accent="var(--accent-cpu)" wide>
+            <AgentsPanel />
           </Card>
         )}
       </div>
 
-      <TabBar active={activeTab} onSelect={onSelectTab} onFocusIsland={onFocusIsland} />
+      <TabBar
+        active={activeTab}
+        onSelect={onSelectTab}
+        onFocusIsland={onFocusIsland}
+        weatherAccent={wxAccent}
+      />
     </div>
   );
 }

@@ -8,7 +8,15 @@ export interface Current {
     "temperature": number;
     "apparent": number;
     "humidity": number;
+    "dewPoint": number;
     "windSpeed": number;
+    "windGusts": number;
+    "windDir": number;
+    "precipitation": number;
+    "cloudCover": number;
+    "pressure": number;
+    "visibility": number;
+    "uvIndex": number;
     "code": number;
     "description": string;
     "isDay": boolean;
@@ -24,6 +32,11 @@ export interface Day {
     "max": number;
     "min": number;
     "precipProb": number;
+    "precipSum": number;
+    "sunrise": string;
+    "sunset": string;
+    "uvMax": number;
+    "windMax": number;
 }
 
 /**

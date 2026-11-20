@@ -24,8 +24,10 @@
   --island-radius-expanded: 16px;
 
   /* Inverted top corners: the island flares into the top screen edge instead
-     of rounding away from it. Should not exceed the idle window's side inset. */
-  --island-shoulder: 6px;
+     of rounding away from it. This is also the window's side inset (the idle
+     width in App.tsx and the window widths in internal/notch), so the flare is
+     never clipped. */
+  --island-shoulder: 12px;
   --island-shoulder-fill: #0b0d12;
 
   /* Frosted grain used by the glass surfaces. */
@@ -78,7 +80,7 @@ body {
      a custom property so the shorthand below always re-evaluates it. */
   --island-backdrop: #050608;
   /* Idle size in pixels, set from App.tsx; the expanded size mirrors the
-     native 660x520 window minus its 20x14 inset. */
+     native 664x560 window minus its 24x14 inset. */
   width: var(--island-idle-width, 188px);
   height: var(--island-idle-height, 30px);
   /* The image layers are shared by both states, so only the backing colour
@@ -134,8 +136,8 @@ body {
 /* Inverted top corners. Each shoulder is the square just outside the island's
    top corner, masked with a quarter-circle cut centred on the corner nearest
    the body: the island then flares out to the screen edge the way a notch
-   does. Their edge lands on the padding edge, one pixel inside the body
-   border, so they tuck under it and no seam shows. */
+   does. The square sits flush with the body's border box and the window's outer
+   edge, so the arc meets the screen edge and nothing overlaps the body border. */
 .island::before,
 .island::after {
   content: "";
@@ -151,7 +153,10 @@ body {
 }
 
 .island::before {
-  right: 100%;
+  /* Offsets are measured from the padding box, which sits one pixel inside the
+     body border: the extra 1px puts the shoulder flush with the border box, so
+     its arc is tangent to the screen edge and the side hairline stays visible. */
+  right: calc(100% + 1px);
   -webkit-mask-image: radial-gradient(
     circle var(--island-shoulder) at 0% 100%,
     transparent var(--island-shoulder),
@@ -165,7 +170,7 @@ body {
 }
 
 .island::after {
-  left: 100%;
+  left: calc(100% + 1px);
   -webkit-mask-image: radial-gradient(
     circle var(--island-shoulder) at 100% 100%,
     transparent var(--island-shoulder),
@@ -210,6 +215,31 @@ body {
 .quick-clock .quick-value {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* The idle pill's weather reading: a 9px glyph over a 9px temperature, so the
+   whole stat stays inside the notch's side gutter. */
+.quick-weather {
+  gap: 2px;
+}
+
+.quick-weather .wx-icon {
+  width: 9px;
+  height: 9px;
+  color: var(--wx-accent, var(--accent-net));
+}
+
+.quick-weather .quick-value {
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quick-weather-void {
+  width: 9px;
+  height: 9px;
 }
 
 .brand-dot {
@@ -310,7 +340,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 18px;
+  /* The top band is where the camera housing sits; centring the content in
+     the space below it keeps the host/platform line clear of the notch. */
+  padding: 20px 18px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.055);
 }
 
@@ -425,83 +457,129 @@ body {
   outline-offset: 2px;
 }
 
-/* --- Settings popover ---------------------------------------------------- */
+/* --- Settings panel ------------------------------------------------------ */
 
-.settings-popover {
+/* A full sheet below the header: it covers the tab content and the floating
+   tab bar, so the panel's own close button is the way back to the dashboard. */
+.settings-panel {
   position: absolute;
-  top: calc(100% + 18px);
-  right: 0;
-  z-index: 20;
-  width: 228px;
-  padding: 10px 10px 8px;
-  border-radius: 13px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, #1b1e27, #0e1016);
-  box-shadow:
-    0 22px 44px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(0, 0, 0, 0.25),
-    0 1px 0 rgba(255, 255, 255, 0.09) inset;
-  max-height: calc(100vh - 70px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
-  transform-origin: 100% 0;
-  animation: settings-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  inset: 64px 0 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(255, 255, 255, 0.055), transparent 60%),
+    linear-gradient(180deg, #171a22, #0b0e14);
+  animation: settings-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
   text-align: left;
 }
 
 @keyframes settings-in {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.97);
+    transform: translateY(8px);
   }
 }
 
-.settings-title {
+.settings-tabs {
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 2px 8px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 4px;
+  padding: 9px 14px 9px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
 }
 
-.settings-title > span {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  color: var(--text);
-}
-
-.settings-close {
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
+.settings-tab {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 4px 10px;
   background: transparent;
   color: var(--dim);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
   cursor: pointer;
   transition:
     color 140ms ease,
-    background 140ms ease;
+    background 140ms ease,
+    border-color 140ms ease;
 }
 
-.settings-close svg {
-  width: 10px;
-  height: 10px;
+.settings-tab:hover {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
 }
 
-.settings-close:hover {
+.settings-tab.is-active {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(167, 139, 250, 0.36);
+  background: rgba(167, 139, 250, 0.14);
+}
+
+.settings-panel-close {
+  flex: none;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.settings-panel-close svg {
+  width: 13px;
+  height: 13px;
+}
+
+.settings-panel-close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.settings-panel-body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 14px 12px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.settings-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-group {
+  padding: 2px 8px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.022);
 }
 
 .settings-section {
   padding: 8px 2px 3px;
-  font-size: 8.5px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -514,9 +592,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  height: 27px;
+  height: 30px;
   padding: 0 6px;
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background 140ms ease;
 }
@@ -538,7 +616,7 @@ body {
   align-items: center;
   gap: 7px;
   min-width: 0;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--muted);
   transition: color 140ms ease;
 }
@@ -564,8 +642,8 @@ body {
 .settings-switch {
   flex: none;
   position: relative;
-  width: 26px;
-  height: 15px;
+  width: 30px;
+  height: 17px;
   border-radius: 99px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.07);
@@ -578,8 +656,8 @@ body {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 9px;
-  height: 9px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: var(--dim);
   transition:
@@ -594,7 +672,7 @@ body {
 }
 
 .settings-row input:checked ~ .settings-switch .settings-knob {
-  transform: translateX(11px);
+  transform: translateX(13px);
   background: #ded4ff;
   box-shadow: 0 0 7px rgba(167, 139, 250, 0.75);
 }
@@ -607,8 +685,148 @@ body {
 .settings-note {
   padding: 4px 6px 2px;
   color: var(--dim);
-  font-size: 8.5px;
+  font-size: 9px;
   line-height: 1.4;
+}
+
+.settings-number-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.settings-number-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.settings-number {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.settings-number input {
+  width: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10.5px;
+  padding: 2px 5px;
+  outline: none;
+  text-align: right;
+}
+
+.settings-number input:focus {
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+.settings-number em {
+  font-style: normal;
+  font-size: 9px;
+  color: var(--dim);
+}
+
+.settings-apps {
+  padding: 2px 6px 4px;
+}
+
+.settings-app-add {
+  display: flex;
+  gap: 5px;
+}
+
+.settings-app-add input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10.5px;
+  padding: 4px 7px;
+  outline: none;
+}
+
+.settings-app-add input:focus {
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+.settings-app-add button {
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.settings-app-add button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.settings-app-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 150px;
+  margin-top: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.settings-app-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 99px;
+  padding: 2px 4px 2px 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.settings-app-chip span {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-app-chip button {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-app-chip button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .settings-select-row {
@@ -616,11 +834,11 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  height: 27px;
+  height: 30px;
   padding: 0 6px;
-  border-radius: 7px;
+  border-radius: 8px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .settings-select-row:hover {
@@ -630,53 +848,52 @@ body {
 
 .settings-select-row select {
   flex: none;
-  width: 96px;
+  width: 110px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 10.5px;
   padding: 2px 4px;
   outline: none;
 }
 
-.settings-update {
+.settings-panel-foot {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 5px 6px 2px;
-  color: var(--dim);
+  padding: 10px 18px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
   font-size: 9px;
+  color: var(--dim);
 }
 
-.settings-update button {
+.settings-panel-foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-check {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
-  padding: 3px 8px;
+  padding: 4px 10px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
   font-family: inherit;
-  font-size: 9px;
+  font-size: 9.5px;
   cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease;
 }
 
-.settings-update button:hover {
+.settings-check:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
-}
-
-.settings-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 6px;
-  padding: 8px 4px 2px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 8.5px;
-  color: var(--dim);
 }
 
 .settings-reset {
@@ -701,7 +918,9 @@ body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: 120px 120px minmax(0, 1fr);
   gap: 10px;
-  padding: 12px 14px 6px;
+  /* Equal breathing room on all four sides of the cards. The floating icon
+     row keeps 6px above the card's bottom edge (see .tabbar). */
+  padding: 14px;
   animation: panel-body-in 260ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -721,6 +940,7 @@ body {
    single full-width card. */
 .panel-body[data-tab="music"],
 .panel-body[data-tab="clipboard"],
+.panel-body[data-tab="calendar"],
 .panel-body[data-tab="agents"],
 .panel-body[data-tab="weather"] {
   grid-template-rows: minmax(0, 1fr);
@@ -779,7 +999,9 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 10px 6px 2px;
+  /* The floating tab bar overlaps the card's lower edge, so the transport
+     keeps a bottom runway and floats clear of it. */
+  padding: 10px 6px 60px;
   --music-accent: var(--accent-net);
 }
 
@@ -1157,13 +1379,19 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* Scope beats the plain .clipboard-search rule further down, whose flex: 1
    would otherwise stretch the search box in this column layout. */
 .weather-panel .weather-search {
   flex: none;
+  height: 24px;
+}
+
+.weather-panel .weather-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .weather-panel .empty-state {
@@ -1213,109 +1441,314 @@ body {
   color: var(--muted);
 }
 
-.weather-now {
+/* Everything under the search box fits the card exactly: no scroll container.
+   The footer is pinned to the card's bottom edge so the space below it matches
+   the card's top padding above the WEATHER label. */
+.wx-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+/* --- Current conditions -------------------------------------------------- */
+
+.wx-hero {
   flex: none;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  display: flex;
   align-items: center;
-  gap: 2px 14px;
-  padding: 2px 4px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  gap: 12px;
+  padding: 0 2px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.weather-now .wx-icon {
-  grid-row: span 2;
-  color: var(--accent-net);
+/* The hero glyph is the tab's anchor: a large bare glyph inside a soft halo
+   tinted with the current sky's accent, so the reading is unmistakable. */
+.wx-medallion {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 46%,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    transparent 70%
+  );
+  color: var(--accent);
 }
 
-.weather-temperature {
+.wx-medallion svg {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+.wx-hero-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.wx-hero-temp {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  font-size: 34px;
+  gap: 9px;
+  font-size: 33px;
   font-weight: 650;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
-.weather-temperature span {
+.wx-hero-temp span {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--muted);
 }
 
-.weather-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  font-size: 10.5px;
-  color: #cfd4de;
-}
-
-.weather-place {
-  grid-column: 1 / -1;
+.wx-hero-sub {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 5px;
+  margin-top: 7px;
   font-size: 10px;
   color: var(--muted);
 }
 
-.weather-refreshing {
-  color: var(--dim);
+.wx-hero-sub svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
 }
 
-.weather-days {
+.wx-dot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+
+.wx-hero-side {
+  flex: none;
+}
+
+.wx-sun {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+.wx-sun span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wx-sun b {
+  font-weight: 600;
+  color: #cfd4de;
+}
+
+.wx-sun svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.wx-sun-up svg {
+  color: var(--accent-battery);
+}
+
+.wx-sun-down svg {
+  color: #f4936b;
+}
+
+/* --- Metric grid --------------------------------------------------------- */
+
+.wx-metrics {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.wx-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 5px 9px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 10px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.045),
+    rgba(255, 255, 255, 0.012)
+  );
+}
+
+.wx-metric-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.wx-metric-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.wx-metric-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.wx-metric-track {
+  height: 2px;
+  margin-top: 3px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.wx-metric-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 55%, #ffffff)
+  );
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* --- Daily forecast ------------------------------------------------------ */
+
+.wx-days {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 
-.weather-day {
+.wx-day {
   display: grid;
-  grid-template-columns: 52px 22px minmax(0, 1fr) auto auto;
+  grid-template-columns: 34px 24px 52px 30px minmax(40px, 1fr) 58px;
   align-items: center;
   gap: 8px;
-  padding: 7px 8px;
+  padding: 4px 6px;
   border-radius: 8px;
   font-size: 10.5px;
+  transition: background 140ms ease;
 }
 
-.weather-day:hover {
-  background: rgba(255, 255, 255, 0.04);
+.wx-day:hover {
+  background: rgba(255, 255, 255, 0.035);
 }
 
-.weather-day-name {
+.wx-day-name {
   color: var(--muted);
 }
 
-.weather-day .wx-icon {
-  color: var(--accent-net);
+.wx-day .wx-icon {
+  color: var(--accent);
 }
 
-.weather-day-desc {
+.wx-day-desc {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.weather-day-temp {
+.wx-day-rain {
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.wx-day-rain.is-wet {
+  color: var(--accent);
+}
+
+/* A thin range track set on the week's shared axis: the fill marks this day's
+   min→max span, so warmer days visibly reach further right. */
+.wx-day-bar {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.wx-day-bar i {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5b9dff, var(--accent-battery));
+}
+
+.wx-day-temp {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
   font-weight: 650;
 }
 
-.weather-day-temp em {
+.wx-day-temp em {
   font-style: normal;
   font-weight: 500;
   color: var(--muted);
 }
 
-.weather-day-rain {
-  min-width: 48px;
-  text-align: right;
-  color: var(--accent-net);
+/* --- Footer -------------------------------------------------------------- */
+
+.wx-foot {
+  flex: none;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 2px;
+  font-size: 9px;
+  color: var(--dim);
+}
+
+.wx-updated {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wx-updated.is-live::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: wx-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes wx-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .clipboard-panel {
@@ -1324,13 +1757,6 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.clipboard-toolbar {
-  flex: none;
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
@@ -1353,6 +1779,15 @@ body {
 .clipboard-search:focus-within {
   border-color: rgba(167, 139, 250, 0.4);
   background: rgba(255, 255, 255, 0.055);
+}
+
+/* Header variant: fixed width beside the card title, so the history list keeps
+   the whole body instead of losing a row to the toolbar. */
+.clipboard-search.clipboard-search-head {
+  flex: none;
+  width: 280px;
+  height: 22px;
+  border-radius: 7px;
 }
 
 .clipboard-search svg {
@@ -1397,9 +1832,9 @@ body {
 
 .clipboard-clear {
   flex: none;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 8px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 7px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(255, 255, 255, 0.035);
   color: var(--muted);
@@ -1458,6 +1893,17 @@ body {
 
 .clipboard-paused button:hover {
   background: rgba(251, 191, 36, 0.26);
+}
+
+.clipboard-paste-error {
+  flex: none;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.09);
+  color: #fca5a5;
+  font-size: 9.5px;
+  line-height: 1.4;
 }
 
 .clipboard-list {
@@ -1634,6 +2080,12 @@ body {
 .clip-kind.is-url {
   background: rgba(34, 211, 238, 0.14);
   color: var(--accent-net);
+}
+
+/* Image entries get a small warm badge next to the preview. */
+.clip-kind.is-image {
+  background: rgba(245, 158, 11, 0.16);
+  color: var(--accent-warn);
 }
 
 /* Image entries lay the preview and its details out side by side. */
@@ -2108,66 +2560,861 @@ body {
   }
 }
 
+.panel-body[data-tab="calendar"] .card-body {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+/* --- Calendar panel ------------------------------------------------------ */
+
+.calendar-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* The floating tab bar hugs the card's lower edge, so the calendar keeps
+     a runway underneath instead of hiding the rail's form behind the glass. */
+  padding-bottom: 40px;
+}
+
+.cal-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cal-nav-btn {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.cal-nav-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cal-nav-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.cal-today {
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 9px;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.cal-today:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cal-title {
+  margin-left: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cal-views {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.cal-view {
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 9px;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.cal-view:hover {
+  color: var(--muted);
+}
+
+.cal-view.is-active {
+  color: var(--text);
+  border-color: rgba(91, 157, 255, 0.4);
+  background: rgba(91, 157, 255, 0.16);
+}
+
+.cal-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 10px;
+}
+
+/* --- Month view ---------------------------------------------------------- */
+
+.cal-month {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-weekdays {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  padding-bottom: 4px;
+}
+
+.cal-weekdays span {
+  text-align: center;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.cal-month-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.cal-day {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 8px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.012)
+  );
+  color: var(--muted);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease;
+}
+
+.cal-day:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.cal-day[data-outside="true"] {
+  opacity: 0.4;
+}
+
+.cal-day[data-selected="true"] {
+  border-color: rgba(91, 157, 255, 0.5);
+  background: rgba(91, 157, 255, 0.12);
+}
+
+.cal-daynum {
+  flex: none;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.cal-day[data-today="true"] .cal-daynum {
+  color: var(--accent-mem);
+}
+
+.cal-day-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cal-chip {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(91, 157, 255, 0.16);
+  color: #c9d8ff;
+  font-size: 7.5px;
+  line-height: 1.35;
+}
+
+.cal-chip-more {
+  background: transparent;
+  color: var(--dim);
+}
+
+/* --- Week / day time grid ------------------------------------------------ */
+
+.cal-time {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-time-head,
+.cal-time-allday {
+  flex: none;
+  display: grid;
+  grid-template-columns: 36px repeat(var(--cal-cols), minmax(0, 1fr));
+}
+
+.cal-time-head {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.cal-time-corner {
+  min-width: 0;
+}
+
+.cal-day-head {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 8px;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.cal-day-head:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cal-day-head[data-selected="true"] {
+  background: rgba(91, 157, 255, 0.14);
+  color: #cfe0ff;
+}
+
+.cal-day-head[data-today="true"] b {
+  color: var(--accent-mem);
+}
+
+.cal-day-head b {
+  font-size: 10.5px;
+  color: var(--text);
+}
+
+.cal-time-allday {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.cal-time-allday-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 2px 4px;
+  font-size: 7.5px;
+  color: var(--dim);
+}
+
+.cal-time-allday-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.cal-allday-chip {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 3px;
+  background: rgba(91, 157, 255, 0.14);
+  color: #c9d8ff;
+  font-family: inherit;
+  font-size: 7.5px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.cal-allday-chip:hover {
+  background: rgba(91, 157, 255, 0.28);
+}
+
+.cal-allday-more {
+  background: transparent;
+  color: var(--dim);
+}
+
+.cal-time-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.cal-time-grid {
+  display: grid;
+  grid-template-columns: 36px repeat(var(--cal-cols), minmax(0, 1fr));
+  align-items: start;
+}
+
+.cal-hour-gutter {
+  position: relative;
+}
+
+.cal-hour-label {
+  position: absolute;
+  right: 4px;
+  font-size: 7.5px;
+  color: var(--dim);
+}
+
+.cal-time-col {
+  position: relative;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.05) 0,
+    rgba(255, 255, 255, 0.05) 1px,
+    transparent 1px,
+    transparent 26px
+  );
+  cursor: pointer;
+}
+
+.cal-block {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 4px;
+  overflow: hidden;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--accent-mem) 45%, transparent);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--accent-mem) 26%, transparent),
+    color-mix(in srgb, var(--accent-mem) 10%, transparent)
+  );
+  color: #e4ecff;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    filter 140ms ease;
+}
+
+.cal-block:hover {
+  border-color: color-mix(in srgb, var(--accent-mem) 70%, transparent);
+  filter: brightness(1.12);
+}
+
+.cal-block b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 8.5px;
+  font-weight: 600;
+}
+
+.cal-block span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 7.5px;
+  color: #a8bde8;
+}
+
+/* --- Day rail: agenda plus composer ------------------------------------- */
+
+.cal-rail {
+  flex: none;
+  width: 190px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cal-rail-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.cal-rail-head b {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.cal-rail-head span {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.cal-rail-head em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 8px;
+  color: var(--dim);
+}
+
+.cal-rail-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.cal-rail-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  font-size: 9px;
+  color: var(--dim);
+}
+
+.cal-event {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.cal-event:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cal-event[data-editing="true"] {
+  border-color: rgba(91, 157, 255, 0.45);
+  background: rgba(91, 157, 255, 0.1);
+}
+
+.cal-event-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cal-event-main:focus-visible {
+  outline: 2px solid rgba(91, 157, 255, 0.6);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.cal-event-time {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 8px;
+  color: var(--accent-mem);
+}
+
+.cal-event-title {
+  grid-column: 1;
+  grid-row: 2;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.cal-event-del {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.cal-event-del svg {
+  width: 10px;
+  height: 10px;
+}
+
+.cal-event:hover .cal-event-del,
+.cal-event-del:focus-visible {
+  opacity: 1;
+}
+
+.cal-event-del:hover {
+  color: var(--accent-danger);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.cal-form {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cal-input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 9.5px;
+  outline: none;
+  user-select: text;
+}
+
+.cal-input:focus {
+  border-color: rgba(91, 157, 255, 0.55);
+  background: rgba(91, 157, 255, 0.06);
+}
+
+.cal-input::placeholder {
+  color: var(--dim);
+}
+
+.cal-form-times {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal-form-times .cal-input {
+  flex: 1;
+}
+
+.cal-form-times span {
+  flex: none;
+  font-size: 9px;
+  color: var(--dim);
+}
+
+.cal-form-error {
+  font-size: 8.5px;
+  color: var(--accent-danger);
+}
+
+.cal-form-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.cal-form-submit {
+  flex: 1;
+  padding: 4px;
+  border: 1px solid rgba(91, 157, 255, 0.45);
+  border-radius: 7px;
+  background: rgba(91, 157, 255, 0.22);
+  color: #dbe6ff;
+  font-family: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.cal-form-submit:hover {
+  background: rgba(91, 157, 255, 0.32);
+}
+
+.cal-form-cancel {
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.cal-form-cancel:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cal-add {
+  flex: none;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px dashed rgba(91, 157, 255, 0.32);
+  border-radius: 7px;
+  background: rgba(91, 157, 255, 0.07);
+  color: #a9c2ff;
+  font-family: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.cal-add:hover {
+  background: rgba(91, 157, 255, 0.13);
+  border-color: rgba(91, 157, 255, 0.5);
+}
+
+.cal-add svg {
+  width: 11px;
+  height: 11px;
+}
+
 /* --- Tab bar -------------------------------------------------------------- */
 
-/* One glassy capsule holding the tab icons; the active tab is a filled
-   circle inside it. The island background is nearly opaque, so the glass look
-   is faked with a translucent fill, a frosted noise grain and an inset top
-   highlight. */
+/* Liquid glass pill (iOS 26 style): a highly translucent capsule whose
+   material is built from the backdrop blur, a gradient rim that catches the
+   light at the top-left, a specular bloom across the upper half and a soft
+   contact shadow. The fill stays almost clear so the panel content tints the
+   glass instead of being hidden by it. */
 .tabbar {
   --tab-size: 32px;
   --tab-gap: 3px;
-  position: relative;
-  flex: none;
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  width: max-content;
+  margin-inline: auto;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--tab-gap);
-  align-self: center;
-  margin: 4px 0 12px;
   padding: 4px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  /* Frost grain on top of a diagonal sheen: the grain is what reads as
-     "frosted", the sheen as the thickness of the glass. */
+  border-radius: calc(var(--tab-size) / 2 + 5px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background:
+    radial-gradient(120% 160% at 50% -40%, rgba(255, 255, 255, 0.18), transparent 58%),
     var(--frost-grain),
     linear-gradient(
-      155deg,
-      rgba(255, 255, 255, 0.13),
-      rgba(255, 255, 255, 0.035) 48%,
-      rgba(255, 255, 255, 0.02) 62%,
-      rgba(255, 255, 255, 0.08)
-    );
+      180deg,
+      rgba(255, 255, 255, 0.09),
+      rgba(255, 255, 255, 0.02) 48%,
+      rgba(255, 255, 255, 0.05)
+    ),
+    rgba(18, 20, 26, 0.22);
+  backdrop-filter: blur(20px) saturate(190%) brightness(1.12);
+  -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-    0 0 0 0.5px rgba(255, 255, 255, 0.05),
-    0 8px 22px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+    /* Rim light inside the edge: bright above, cool below. */
+    inset 0 1px 1px rgba(255, 255, 255, 0.42),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.14),
+    /* Thickness: a faint glow that hugs the inside of the capsule. */
+    inset 0 0 14px rgba(255, 255, 255, 0.07),
+    inset 0 -10px 16px -14px rgba(255, 255, 255, 0.22),
+    /* Contact + ambient shadow, with a dark hairline that reads as the
+       lens edge sitting on the surface. */
+    0 0 0 0.5px rgba(0, 0, 0, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.32),
+    0 12px 28px -8px rgba(0, 0, 0, 0.5);
+}
+
+.tabbar-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Gradient hairline rim: bright at the top-left, fading through the middle and
+   picking up again at the bottom-right, the way a glass edge refracts. */
+.tabbar::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: calc(var(--tab-size) / 2 + 6px);
+  background: linear-gradient(
+    var(--glass-rim-angle, 118deg),
+    rgba(255, 255, 255, 0.74) 0%,
+    rgba(255, 255, 255, 0.3) 9%,
+    rgba(255, 255, 255, 0.05) 27%,
+    rgba(255, 255, 255, 0.17) 44%,
+    rgba(255, 255, 255, 0.04) 61%,
+    rgba(255, 255, 255, 0.19) 79%,
+    rgba(255, 255, 255, 0.55) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  filter: url("#tabbar-liquid-rim");
+  pointer-events: none;
+}
+
+/* Specular bloom riding the top of the glass, plus a faint reflection off the
+   bottom edge. The clusters sit at uneven offsets and widths so the highlight
+   never looks mirrored; turbulence then warps their edges. */
+.tabbar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(58% 82% at var(--glass-x1, 16%) -22%, rgba(255, 255, 255, 0.4), transparent 58%),
+    radial-gradient(42% 64% at var(--glass-x2, 47%) -34%, rgba(255, 255, 255, 0.26), transparent 62%),
+    radial-gradient(34% 58% at var(--glass-x3, 71%) -18%, rgba(255, 255, 255, 0.2), transparent 64%),
+    radial-gradient(30% 46% at var(--glass-x4, 92%) 4%, rgba(255, 255, 255, 0.12), transparent 68%),
+    conic-gradient(
+      from var(--glass-conic-angle, 190deg) at 34% -20%,
+      transparent 0deg,
+      rgba(255, 255, 255, 0.1) 26deg,
+      transparent 64deg,
+      rgba(255, 255, 255, 0.055) 128deg,
+      transparent 190deg
+    ),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.055), transparent 26%);
+  filter: url("#tabbar-liquid-sheen");
+  pointer-events: none;
 }
 
 /* The pill that rides between tabs. Positioned from the padding box, one
    step per tab (width + gap), so it only needs the active index. */
 .tab-indicator {
   position: absolute;
+  z-index: 2;
   top: 4px;
   left: 4px;
   width: var(--tab-size);
   height: var(--tab-size);
   border-radius: 50%;
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.24),
-    rgba(255, 255, 255, 0.07)
-  );
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(90% 90% at 34% 18%, rgba(255, 255, 255, 0.36), transparent 60%),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.24),
+      rgba(255, 255, 255, 0.07) 62%,
+      rgba(255, 255, 255, 0.12)
+    );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-    0 3px 10px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.14),
+    0 2px 6px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(5px) saturate(170%);
+  -webkit-backdrop-filter: blur(5px) saturate(170%);
   transform: translateX(
     calc(var(--tab-index, 0) * (var(--tab-size) + var(--tab-gap)))
   );
@@ -2177,7 +3424,7 @@ body {
 
 .tab {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: var(--tab-size);
   height: var(--tab-size);
   display: grid;
@@ -2250,7 +3497,7 @@ body {
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
 }
 
@@ -2263,6 +3510,7 @@ body {
 }
 
 .card-hint {
+  margin-left: auto;
   max-width: 62%;
   overflow: hidden;
   white-space: nowrap;
@@ -2272,6 +3520,7 @@ body {
 }
 
 .card-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2561,12 +3810,15 @@ body {
   background: rgba(255, 255, 255, 0.14);
 }
 
+/* Lives in the card title row, so it keeps a fixed width instead of
+   stretching; the process table gets the whole body height. */
 .proc-search {
   flex: none;
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  width: 280px;
+  height: 22px;
   padding: 0 8px;
   border-radius: 7px;
   border: 1px solid rgba(255, 255, 255, 0.07);

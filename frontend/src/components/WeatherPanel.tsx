@@ -1,117 +1,10 @@
 import type { Day } from "../../bindings/doter/internal/weather/models";
-import { useWeather } from "../hooks/useWeather";
+import type { WeatherController } from "../hooks/useWeather";
+import { WeatherIcon } from "./WeatherIcon";
 
 interface WeatherPanelProps {
+  weather: WeatherController;
   onFocusIsland: () => void;
-}
-
-/** WMO weather code groups the icon set is drawn from. */
-type Kind = "clear" | "partly" | "cloudy" | "fog" | "rain" | "snow" | "storm";
-
-function kindOf(code: number): Kind {
-  switch (code) {
-    case 0:
-      return "clear";
-    case 1:
-    case 2:
-      return "partly";
-    case 3:
-      return "cloudy";
-    case 45:
-    case 48:
-      return "fog";
-    case 51:
-    case 53:
-    case 55:
-    case 56:
-    case 57:
-    case 61:
-    case 63:
-    case 65:
-    case 66:
-    case 67:
-    case 80:
-    case 81:
-    case 82:
-      return "rain";
-    case 71:
-    case 73:
-    case 75:
-    case 77:
-    case 85:
-    case 86:
-      return "snow";
-    default:
-      return code >= 95 ? "storm" : "cloudy";
-  }
-}
-
-/** A minimal weather glyph, drawn in the panel's stroke style. */
-function WeatherIcon({ code, size = 20 }: { code: number; size?: number }) {
-  const kind = kindOf(code);
-  const props = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.7,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
-
-  switch (kind) {
-    case "clear":
-      return (
-        <svg {...props} className="wx-icon wx-sun">
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 3v2M12 19v2M3 12h2M19 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6" />
-        </svg>
-      );
-    case "partly":
-      return (
-        <svg {...props} className="wx-icon wx-sun">
-          <circle cx="8.5" cy="8.5" r="3" />
-          <path d="M8.5 2.5v1.6M2.5 8.5h1.6M4.3 4.3l1.1 1.1M12.7 4.3l-1.1 1.1" />
-          <path d="M9 20h8.5a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.6 1.4A2.8 2.8 0 0 0 9 20Z" />
-        </svg>
-      );
-    case "cloudy":
-      return (
-        <svg {...props} className="wx-icon wx-cloud">
-          <path d="M7 18h10a3.6 3.6 0 0 0 .4-7.2 5.4 5.4 0 0 0-10.3-.6A3.9 3.9 0 0 0 7 18Z" />
-        </svg>
-      );
-    case "fog":
-      return (
-        <svg {...props} className="wx-icon wx-fog">
-          <path d="M7 13h10a3.6 3.6 0 0 0 .4-7.2 5.4 5.4 0 0 0-10.3-.6A3.9 3.9 0 0 0 7 13Z" />
-          <path d="M5 17h14M8 20h9" />
-        </svg>
-      );
-    case "snow":
-      return (
-        <svg {...props} className="wx-icon wx-snow">
-          <path d="M7 14h10a3.6 3.6 0 0 0 .4-7.2 5.4 5.4 0 0 0-10.3-.6A3.9 3.9 0 0 0 7 14Z" />
-          <path d="M8 18h.01M12 20h.01M16 18h.01" />
-        </svg>
-      );
-    case "storm":
-      return (
-        <svg {...props} className="wx-icon wx-storm">
-          <path d="M7 14h10a3.6 3.6 0 0 0 .4-7.2 5.4 5.4 0 0 0-10.3-.6A3.9 3.9 0 0 0 7 14Z" />
-          <path d="M12.5 16 10 20h3l-1 3" />
-        </svg>
-      );
-    default:
-      return (
-        <svg {...props} className="wx-icon wx-rain">
-          <path d="M7 13h10a3.6 3.6 0 0 0 .4-7.2 5.4 5.4 0 0 0-10.3-.6A3.9 3.9 0 0 0 7 13Z" />
-          <path d="M8.5 16.5 7.5 19M12 16.5 11 19M15.5 16.5 14.5 19" />
-        </svg>
-      );
-  }
 }
 
 function weekday(date: string, index: number): string {
@@ -125,9 +18,62 @@ function degree(value: number): string {
   return `${Math.round(value)}°`;
 }
 
+/** Compass bearing to a Chinese wind name. */
+function windDir(deg: number): string {
+  const names = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"];
+  return names[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+}
+
+function uvLabel(index: number): string {
+  if (index < 0.5) return "无";
+  if (index < 3) return "弱";
+  if (index < 6) return "中等";
+  if (index < 8) return "强";
+  if (index < 11) return "很强";
+  return "极强";
+}
+
+function hhmm(stamp: number): string {
+  const d = new Date(stamp);
+  return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+}
+
+/** One metric tile in the facts grid. `ratio` draws a thin progress track. */
+function Metric({
+  label,
+  value,
+  sub,
+  ratio,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  ratio?: number;
+}) {
+  return (
+    <div className="wx-metric">
+      <span className="wx-metric-label">{label}</span>
+      <span className="wx-metric-value">{value}</span>
+      {ratio !== undefined ? (
+        <span className="wx-metric-track">
+          <i style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%` }} />
+        </span>
+      ) : (
+        <span className="wx-metric-sub">{sub}</span>
+      )}
+    </div>
+  );
+}
+
 /** The weather tab. */
-export function WeatherPanel({ onFocusIsland }: WeatherPanelProps) {
-  const { forecast, loading, failed, query, setQuery, results, choose } = useWeather();
+export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
+  const { forecast, loading, failed, query, setQuery, results, choose } = weather;
+
+  const days = forecast?.days ?? [];
+  // A shared axis for the daily range bars, so the bars compare across days.
+  const lo = days.length ? Math.min(...days.map((d) => d.min)) : 0;
+  const hi = days.length ? Math.max(...days.map((d) => d.max)) : 1;
+  const span = Math.max(hi - lo, 1);
 
   return (
     <div className="weather-panel">
@@ -185,42 +131,124 @@ export function WeatherPanel({ onFocusIsland }: WeatherPanelProps) {
       ) : !forecast ? (
         <div className="empty-state">正在获取天气…</div>
       ) : (
-        <>
-          <div className="weather-now">
-            <WeatherIcon code={forecast.current.code} size={44} />
-            <div className="weather-temperature">
-              {degree(forecast.current.temperature)}
-              <span>{forecast.current.description}</span>
+        <div className="wx-body">
+          <section className="wx-hero">
+            <div className="wx-medallion">
+              <WeatherIcon code={forecast.current.code} size={58} night={!forecast.current.isDay} />
             </div>
-            <div className="weather-facts">
-              <span>体感 {degree(forecast.current.apparent)}</span>
-              <span>湿度 {forecast.current.humidity}%</span>
-              <span>风速 {Math.round(forecast.current.windSpeed)} km/h</span>
-            </div>
-            <div className="weather-place">
-              {[forecast.location.name, forecast.location.region]
-                .filter(Boolean)
-                .join(" · ")}
-              {loading && <span className="weather-refreshing">更新中…</span>}
-            </div>
-          </div>
 
-          <div className="weather-days">
-            {(forecast.days ?? []).map((day: Day, index) => (
-              <div className="weather-day" key={day.date}>
-                <span className="weather-day-name">{weekday(day.date, index)}</span>
-                <WeatherIcon code={day.code} size={18} />
-                <span className="weather-day-desc">{day.description}</span>
-                <span className="weather-day-temp">
-                  {degree(day.max)} <em>{degree(day.min)}</em>
-                </span>
-                {day.precipProb > 0 && (
-                  <span className="weather-day-rain">☂ {day.precipProb}%</span>
-                )}
+            <div className="wx-hero-main">
+              <div className="wx-hero-temp">
+                {degree(forecast.current.temperature)}
+                <span>{forecast.current.description}</span>
               </div>
-            ))}
-          </div>
-        </>
+              <div className="wx-hero-sub">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 21s6.5-6 6.5-10.5a6.5 6.5 0 1 0-13 0C5.5 15 12 21 12 21Z" />
+                  <circle cx="12" cy="10.5" r="2.2" />
+                </svg>
+                {[forecast.location.name, forecast.location.region].filter(Boolean).join(" · ")}
+                <span className="wx-dot" />
+                {forecast.current.isDay ? "白天" : "夜间"}
+              </div>
+            </div>
+
+            <div className="wx-hero-side">
+              <div className="wx-sun">
+                <span className="wx-sun-up">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 18h18" />
+                    <path d="M7.5 18a4.5 4.5 0 0 1 9 0" />
+                    <path d="M12 3.5v3M6.6 6.1l1.5 1.5M17.4 6.1l-1.5 1.5" />
+                  </svg>
+                  日出 <b>{days[0]?.sunrise || "—"}</b>
+                </span>
+                <span className="wx-sun-down">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 18h18" />
+                    <path d="M7.5 18a4.5 4.5 0 0 1 9 0" />
+                    <path d="M12 3.5v3.5M10.2 5.5 12 7.3l1.8-1.8" />
+                  </svg>
+                  日落 <b>{days[0]?.sunset || "—"}</b>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="wx-metrics">
+            <Metric
+              label="体感"
+              value={degree(forecast.current.apparent)}
+              sub={`实际 ${degree(forecast.current.temperature)}`}
+            />
+            <Metric
+              label="湿度"
+              value={`${forecast.current.humidity}%`}
+              ratio={forecast.current.humidity / 100}
+            />
+            <Metric
+              label="风力"
+              value={`${windDir(forecast.current.windDir)}风`}
+              sub={`${Math.round(forecast.current.windSpeed)} km/h · 阵风 ${Math.round(forecast.current.windGusts)}`}
+            />
+            <Metric
+              label="降水"
+              value={`${days[0]?.precipProb ?? 0}%`}
+              sub={`今日 ${(days[0]?.precipSum ?? 0).toFixed(1)} mm`}
+            />
+            <Metric
+              label="云量"
+              value={`${forecast.current.cloudCover}%`}
+              ratio={forecast.current.cloudCover / 100}
+            />
+            <Metric
+              label="气压"
+              value={`${Math.round(forecast.current.pressure)}`}
+              sub="hPa"
+            />
+            <Metric
+              label="能见度"
+              value={`${(forecast.current.visibility / 1000).toFixed(1)}`}
+              sub="km"
+            />
+            <Metric
+              label="紫外线"
+              value={`${forecast.current.uvIndex.toFixed(1)}`}
+              sub={uvLabel(forecast.current.uvIndex)}
+            />
+          </section>
+
+          <section className="wx-days">
+            {days.map((day: Day, index) => {
+              const left = ((day.min - lo) / span) * 100;
+              const width = Math.max(((day.max - day.min) / span) * 100, 6);
+              return (
+                <div className="wx-day" key={day.date}>
+                  <span className="wx-day-name">{weekday(day.date, index)}</span>
+                  <WeatherIcon code={day.code} size={22} />
+                  <span className="wx-day-desc">{day.description}</span>
+                  <span className={day.precipProb > 0 ? "wx-day-rain is-wet" : "wx-day-rain"}>
+                    {day.precipProb > 0 ? `${day.precipProb}%` : ""}
+                  </span>
+                  <span className="wx-day-bar">
+                    <i style={{ left: `${left}%`, width: `${width}%` }} />
+                  </span>
+                  <span className="wx-day-temp">
+                    {degree(day.max)}
+                    <em>{degree(day.min)}</em>
+                  </span>
+                </div>
+              );
+            })}
+          </section>
+
+          <footer className="wx-foot">
+            <span className={loading ? "wx-updated is-live" : "wx-updated"}>
+              {loading ? "更新中…" : `更新于 ${hhmm(forecast.updatedAt)}`}
+            </span>
+            <span>Open-Meteo</span>
+          </footer>
+        </div>
       )}
     </div>
   );

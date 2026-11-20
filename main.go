@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -35,6 +36,9 @@ var appIcon []byte
 
 //go:embed build/tray.png
 var trayIcon []byte
+
+//go:embed build/tray-template.png
+var trayTemplateIcon []byte
 
 // clipboardHotkey is the global shortcut that opens the clipboard tab.
 const clipboardHotkey = "CmdOrCtrl+Shift+V"
@@ -140,6 +144,7 @@ func main() {
 	settingsService := services.NewSettingsService(
 		app,
 		prefsStore,
+		clipboardHistory,
 		clipboardWatcher,
 		func() { go requestNotificationPermission(notificationService) },
 		setClipboardHotkey,
@@ -194,7 +199,12 @@ func main() {
 
 	tray := app.SystemTray.New()
 	tray.SetTooltip("Doter — system monitor")
-	tray.SetIcon(trayIcon)
+	if runtime.GOOS == "darwin" {
+		// macOS template images invert with the menu bar's appearance.
+		tray.SetTemplateIcon(trayTemplateIcon)
+	} else {
+		tray.SetIcon(trayIcon)
+	}
 	tray.SetMenu(buildTrayMenu(app, island, updateService))
 
 	// A global shortcut is the quickest way to bring the island back after a
@@ -297,6 +307,11 @@ func pumpAgents(app *application.App, monitor *agents.Monitor, engine *alerts.En
 // openTab shows the island, focuses it and asks the frontend to pin the
 // requested tab. The frontend owns the resize animation, so this only asks.
 func openTab(app *application.App, island *notch.Controller, tab string) {
+	if tab == "clipboard" {
+		// Capture the app the user was in before the island takes focus;
+		// auto-paste returns there after the panel closes.
+		clipboard.RememberTarget()
+	}
 	island.Show()
 	island.Focus()
 	app.Event.Emit(services.EventOpenTab, tab)

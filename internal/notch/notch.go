@@ -18,9 +18,12 @@ const (
 	// window, including while the app is inactive.
 	EventHover = "island:hover"
 
-	DefaultCollapsedWidth  = 200
+	// The window keeps a 12pt inset on each side for the frontend's inverted
+	// top corners (--island-shoulder in styles.css), so both sizes are the
+	// island body plus that room.
+	DefaultCollapsedWidth  = 212
 	DefaultCollapsedHeight = 46
-	DefaultExpandedWidth   = 660
+	DefaultExpandedWidth   = 664
 	DefaultExpandedHeight  = 560
 
 	// notchSideWidth is the room kept on each side of the camera housing for
@@ -90,9 +93,13 @@ func New(app *application.App, opts Options) *Controller {
 			TitleBar:      application.MacTitleBarHidden,
 			WindowClass:   application.MacWindowClassPanel,
 			PanelPreferences: application.MacPanelPreferences{
-				NonActivating:          true,
-				FloatingPanel:          true,
-				BecomesKeyOnlyIfNeeded: true,
+				// NonActivating lets the panel take mouse input without
+				// activating the app or stealing the menu bar.
+				NonActivating: true,
+				FloatingPanel: true,
+				// BecomesKeyOnlyIfNeeded must stay off. With it on, a click on
+				// a control (tab, card, button) leaves the panel non-key, and
+				// AppKit discards that first click instead of delivering it.
 			},
 			WindowLevel: application.MacWindowLevelStatus,
 			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |

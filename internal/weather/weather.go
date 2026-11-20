@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,13 +42,21 @@ type Location struct {
 
 // Current is the right-now weather.
 type Current struct {
-	Temperature float64 `json:"temperature"`
-	Apparent    float64 `json:"apparent"`
-	Humidity    int     `json:"humidity"`
-	WindSpeed   float64 `json:"windSpeed"`
-	Code        int     `json:"code"`
-	Description string  `json:"description"`
-	IsDay       bool    `json:"isDay"`
+	Temperature   float64 `json:"temperature"`
+	Apparent      float64 `json:"apparent"`
+	Humidity      int     `json:"humidity"`
+	DewPoint      float64 `json:"dewPoint"`
+	WindSpeed     float64 `json:"windSpeed"`
+	WindGusts     float64 `json:"windGusts"`
+	WindDir       int     `json:"windDir"`
+	Precipitation float64 `json:"precipitation"`
+	CloudCover    int     `json:"cloudCover"`
+	Pressure      float64 `json:"pressure"`
+	Visibility    float64 `json:"visibility"`
+	UVIndex       float64 `json:"uvIndex"`
+	Code          int     `json:"code"`
+	Description   string  `json:"description"`
+	IsDay         bool    `json:"isDay"`
 }
 
 // Day is one daily forecast entry.
@@ -58,6 +67,11 @@ type Day struct {
 	Max         float64 `json:"max"`
 	Min         float64 `json:"min"`
 	PrecipProb  int     `json:"precipProb"`
+	PrecipSum   float64 `json:"precipSum"`
+	Sunrise     string  `json:"sunrise"`
+	Sunset      string  `json:"sunset"`
+	UVMax       float64 `json:"uvMax"`
+	WindMax     float64 `json:"windMax"`
 }
 
 // Forecast is what the UI renders.
@@ -193,8 +207,8 @@ func (c *Client) fetch(ctx context.Context, loc Location) (Forecast, error) {
 	params := url.Values{}
 	params.Set("latitude", fmt.Sprintf("%.4f", loc.Lat))
 	params.Set("longitude", fmt.Sprintf("%.4f", loc.Lon))
-	params.Set("current", "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m")
-	params.Set("daily", "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max")
+	params.Set("current", "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cloud_cover,pressure_msl,visibility,uv_index,dew_point_2m")
+	params.Set("daily", "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,uv_index_max,wind_speed_10m_max")
 	params.Set("timezone", "auto")
 	params.Set("forecast_days", fmt.Sprintf("%d", ForecastDays))
 
@@ -212,9 +226,17 @@ func parseForecast(body []byte, loc Location) (Forecast, error) {
 			Temperature float64 `json:"temperature_2m"`
 			Humidity    int     `json:"relative_humidity_2m"`
 			Apparent    float64 `json:"apparent_temperature"`
+			DewPoint    float64 `json:"dew_point_2m"`
 			IsDay       int     `json:"is_day"`
 			Code        int     `json:"weather_code"`
 			WindSpeed   float64 `json:"wind_speed_10m"`
+			WindGusts   float64 `json:"wind_gusts_10m"`
+			WindDir     int     `json:"wind_direction_10m"`
+			Precip      float64 `json:"precipitation"`
+			CloudCover  int     `json:"cloud_cover"`
+			Pressure    float64 `json:"pressure_msl"`
+			Visibility  float64 `json:"visibility"`
+			UVIndex     float64 `json:"uv_index"`
 		} `json:"current"`
 		Daily struct {
 			Time       []string  `json:"time"`
@@ -222,6 +244,11 @@ func parseForecast(body []byte, loc Location) (Forecast, error) {
 			Max        []float64 `json:"temperature_2m_max"`
 			Min        []float64 `json:"temperature_2m_min"`
 			PrecipProb []int     `json:"precipitation_probability_max"`
+			PrecipSum  []float64 `json:"precipitation_sum"`
+			Sunrise    []string  `json:"sunrise"`
+			Sunset     []string  `json:"sunset"`
+			UVMax      []float64 `json:"uv_index_max"`
+			WindMax    []float64 `json:"wind_speed_10m_max"`
 		} `json:"daily"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -243,23 +270,45 @@ func parseForecast(body []byte, loc Location) (Forecast, error) {
 			Max:         payload.Daily.Max[i],
 			Min:         payload.Daily.Min[i],
 			PrecipProb:  at(payload.Daily.PrecipProb, i),
+			PrecipSum:   atFloat(payload.Daily.PrecipSum, i),
+			Sunrise:     clockOf(atString(payload.Daily.Sunrise, i)),
+			Sunset:      clockOf(atString(payload.Daily.Sunset, i)),
+			UVMax:       atFloat(payload.Daily.UVMax, i),
+			WindMax:     atFloat(payload.Daily.WindMax, i),
 		})
 	}
 
 	return Forecast{
 		Location: loc,
 		Current: Current{
-			Temperature: payload.Current.Temperature,
-			Apparent:    payload.Current.Apparent,
-			Humidity:    payload.Current.Humidity,
-			WindSpeed:   payload.Current.WindSpeed,
-			Code:        payload.Current.Code,
-			Description: Describe(payload.Current.Code),
-			IsDay:       payload.Current.IsDay == 1,
+			Temperature:   payload.Current.Temperature,
+			Apparent:      payload.Current.Apparent,
+			Humidity:      payload.Current.Humidity,
+			DewPoint:      payload.Current.DewPoint,
+			WindSpeed:     payload.Current.WindSpeed,
+			WindGusts:     payload.Current.WindGusts,
+			WindDir:       payload.Current.WindDir,
+			Precipitation: payload.Current.Precip,
+			CloudCover:    payload.Current.CloudCover,
+			Pressure:      payload.Current.Pressure,
+			Visibility:    payload.Current.Visibility,
+			UVIndex:       payload.Current.UVIndex,
+			Code:          payload.Current.Code,
+			Description:   Describe(payload.Current.Code),
+			IsDay:         payload.Current.IsDay == 1,
 		},
 		Days:      days,
 		UpdatedAt: time.Now().UnixMilli(),
 	}, nil
+}
+
+// clockOf trims an Open-Meteo timestamp to the local time, e.g.
+// "2026-11-19T06:24" becomes "06:24". Empty input stays empty.
+func clockOf(stamp string) string {
+	if i := strings.IndexByte(stamp, 'T'); i >= 0 && len(stamp) >= i+6 {
+		return stamp[i+1 : i+6]
+	}
+	return stamp
 }
 
 // at returns items[i], or zero when i is past the end.
@@ -268,6 +317,20 @@ func at(items []int, i int) int {
 		return items[i]
 	}
 	return 0
+}
+
+func atFloat(items []float64, i int) float64 {
+	if i < len(items) {
+		return items[i]
+	}
+	return 0
+}
+
+func atString(items []string, i int) string {
+	if i < len(items) {
+		return items[i]
+	}
+	return ""
 }
 
 func (c *Client) getJSON(ctx context.Context, rawURL string, out any) error {

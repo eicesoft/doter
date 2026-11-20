@@ -62,3 +62,17 @@ func TestDescribe(t *testing.T) {
 		t.Errorf("Describe(1234) = %q", got)
 	}
 }
+
+func TestClockOf(t *testing.T) {
+	cases := map[string]string{
+		"2026-11-19T06:24": "06:24",
+		"2026-11-19T16:54": "16:54",
+		"":                 "",
+		"garbage":          "garbage",
+	}
+	for in, want := range cases {
+		if got := clockOf(in); got != want {
+			t.Errorf("clockOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

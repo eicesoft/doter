@@ -3,6 +3,7 @@ package clipboard
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -69,13 +70,13 @@ func TestHistoryTruncatesContentButKeepsFullCopy(t *testing.T) {
 	h := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
 
 	long := ""
-	for i := 0; i < MaxContentBytes+100; i++ {
+	for i := 0; i < DefaultPreviewBytes+100; i++ {
 		long += "a"
 	}
 	entry, _ := h.Add(long, "text")
 
-	if len(entry.Content) != MaxContentBytes {
-		t.Fatalf("content should be truncated to %d bytes, got %d", MaxContentBytes, len(entry.Content))
+	if len(entry.Content) != DefaultPreviewBytes {
+		t.Fatalf("content should be truncated to %d bytes, got %d", DefaultPreviewBytes, len(entry.Content))
 	}
 	if entry.ContentLen != len(long) {
 		t.Fatalf("content length should be %d, got %d", len(long), entry.ContentLen)
@@ -109,11 +110,37 @@ func TestHistoryDeleteAndClear(t *testing.T) {
 
 func TestHistoryCapsEntries(t *testing.T) {
 	h := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
-	for i := 0; i < MaxHistory+10; i++ {
+	for i := 0; i < DefaultMaxEntries+10; i++ {
 		h.Add(string(rune('a'+i%26))+string(rune(i)), "text")
 	}
-	if got := len(h.List()); got > MaxHistory {
-		t.Fatalf("history should hold at most %d entries, got %d", MaxHistory, got)
+	if got := len(h.List()); got > DefaultMaxEntries {
+		t.Fatalf("history should hold at most %d entries, got %d", DefaultMaxEntries, got)
+	}
+}
+
+func TestHistoryLimitsAreConfigurable(t *testing.T) {
+	h := NewHistory(filepath.Join(t.TempDir(), "clipboard.json"))
+	for i := range 20 {
+		h.Add(string(rune('a'+i)), "text")
+	}
+
+	h.SetLimits(5, 512)
+	entries := h.List()
+	if len(entries) != 5 {
+		t.Fatalf("configured cap should keep 5 entries, got %d", len(entries))
+	}
+
+	long := strings.Repeat("a", 800)
+	entry, _ := h.Add(long, "text")
+	if len(entry.Content) != 512 {
+		t.Fatalf("configured preview should be 512 bytes, got %d", len(entry.Content))
+	}
+
+	// Enlarging the preview must recover the full stored text, not the old
+	// truncated copy.
+	h.SetLimits(5, 1024)
+	if got := len(h.List()[0].Content); got != 800 {
+		t.Fatalf("preview increase should expose %d bytes, got %d", 800, got)
 	}
 }
 

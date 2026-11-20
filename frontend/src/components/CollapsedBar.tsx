@@ -1,11 +1,15 @@
 import type { Snapshot } from "../../bindings/doter/internal/sysinfo/models";
+import type { CSSProperties } from "react";
+import type { Forecast } from "../../bindings/doter/internal/weather/models";
 import type { CollapsedMetric } from "../lib/settings";
 import { formatClock, formatPercent, formatRateCompact } from "../lib/format";
+import { WeatherIcon, weatherAccent } from "./WeatherIcon";
 
 interface CollapsedBarProps {
   snapshot: Snapshot | null;
   clock: Date;
   agents: number;
+  forecast: Forecast | null;
   metrics: readonly CollapsedMetric[];
 }
 
@@ -27,9 +31,10 @@ interface MetricProps {
   snapshot: Snapshot | null;
   clock: Date;
   agents: number;
+  forecast: Forecast | null;
 }
 
-function Metric({ metric, snapshot, clock, agents }: MetricProps) {
+function Metric({ metric, snapshot, clock, agents, forecast }: MetricProps) {
   const cpu = snapshot?.cpu.usage ?? 0;
   const memory = snapshot?.memory.usedPercent ?? 0;
   const battery = snapshot?.battery;
@@ -70,7 +75,37 @@ function Metric({ metric, snapshot, clock, agents }: MetricProps) {
           <span className="quick-value">{formatClock(clock, false)}</span>
         </div>
       );
+    case "weather": {
+      const current = forecast?.current;
+      // The glyph sits in the dot slot so the pill keeps one row height; it
+      // is deliberately tiny, and the temperature carries the reading. The
+      // glyph alone takes the sky's colour, as it would in the expanded tab.
+      const accent = current ? weatherAccent(current.code, !current.isDay) : undefined;
+      return (
+        <div
+          className="quick quick-stacked quick-weather"
+          title={weatherTitle(forecast)}
+          style={accent ? ({ "--wx-accent": accent } as CSSProperties) : undefined}
+        >
+          {current ? (
+            <WeatherIcon code={current.code} size={9} night={!current.isDay} />
+          ) : (
+            <span className="quick-weather-void" aria-hidden="true" />
+          )}
+          <span className="quick-value">{current ? `${Math.round(current.temperature)}°` : "—"}</span>
+        </div>
+      );
+    }
   }
+}
+
+function weatherTitle(forecast: Forecast | null): string {
+  const current = forecast?.current;
+  if (!current) return "天气数据暂不可用";
+  const place = forecast?.location.name;
+  return [place, current.description, `体感 ${Math.round(current.apparent)}°`]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function Stat({ colour, value, title }: { colour: string; value: string; title: string }) {
@@ -87,7 +122,7 @@ function Stat({ colour, value, title }: { colour: string; value: string; title: 
 }
 
 /** The idle pill: two user-selected metrics at a glance. */
-export function CollapsedBar({ snapshot, clock, agents, metrics }: CollapsedBarProps) {
+export function CollapsedBar({ snapshot, clock, agents, forecast, metrics }: CollapsedBarProps) {
   return (
     <div className={metrics.length === 1 ? "collapsed-bar is-single" : "collapsed-bar"}>
       {metrics.map((metric, index) => (
@@ -97,6 +132,7 @@ export function CollapsedBar({ snapshot, clock, agents, metrics }: CollapsedBarP
           snapshot={snapshot}
           clock={clock}
           agents={agents}
+          forecast={forecast}
         />
       ))}
     </div>

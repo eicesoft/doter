@@ -10,6 +10,7 @@ import { useBackendSettings } from "./hooks/useBackendSettings";
 import { useClock } from "./hooks/useClock";
 import { useSeries } from "./hooks/useSeries";
 import { useSystemInfo } from "./hooks/useSystemInfo";
+import { useWeather } from "./hooks/useWeather";
 import { loadSettings, saveSettings, type Settings } from "./lib/settings";
 
 /** Wait for the collapse transition before shrinking the native window. */
@@ -21,6 +22,7 @@ const GLASS_DELAY_MS = 200;
 function App() {
   const { snapshot, staticInfo } = useSystemInfo();
   const agents = useAgentSessions();
+  const weather = useWeather();
   const clock = useClock();
 
   const cpuSeries = useSeries(snapshot?.cpu.usage ?? 0, snapshot?.timestamp ?? 0, 48);
@@ -126,7 +128,9 @@ function App() {
     // while the window still shows the collapsed frame: the island then grows
     // smoothly from the pill instead of appearing at full size.
     const root = document.documentElement;
-    root.style.setProperty("--island-idle-width", `${window.innerWidth - 12}px`);
+    // Leave one top-shoulder width on each side (--island-shoulder in
+    // styles.css), so the inverted corners have room inside the transparent window.
+    root.style.setProperty("--island-idle-width", `${window.innerWidth - 24}px`);
     root.style.setProperty("--island-idle-height", `${window.innerHeight - 8}px`);
   }, []);
 
@@ -198,6 +202,7 @@ function App() {
         snapshot={snapshot}
         clock={clock}
         agents={agents.snapshot?.running ?? 0}
+        forecast={weather.forecast}
         metrics={settings.collapsed}
       />
 
@@ -207,6 +212,7 @@ function App() {
         cpuSeries={cpuSeries}
         netSeries={netSeries}
         clock={clock}
+        weather={weather}
         pinned={pinned}
         onTogglePin={togglePin}
         onFocusIsland={focusIsland}
@@ -219,6 +225,11 @@ function App() {
         onSetAlertsEnabled={backend.setAlertsEnabled}
         onSetClipboardPaused={backend.setClipboardPaused}
         onSetClipboardHotkeyEnabled={backend.setClipboardHotkeyEnabled}
+        onSetClipboardHistoryLimit={backend.setClipboardHistoryLimit}
+        onSetClipboardPreviewBytes={backend.setClipboardPreviewBytes}
+        onSetClipboardImageMaxBytes={backend.setClipboardImageMaxBytes}
+        onSetClipboardAutoPaste={backend.setClipboardAutoPaste}
+        onSetClipboardExcludedApps={backend.setClipboardExcludedApps}
         onSetAutostart={backend.setAutostart}
         onSetHideOnFullscreen={backend.setHideOnFullscreen}
       />

@@ -38,6 +38,28 @@ export function SetAutostart(enabled: boolean): $CancellablePromise<prefs$0.Sett
 }
 
 /**
+ * SetClipboardAutoPaste toggles pasting the selected entry into the previous
+ * application.
+ */
+export function SetClipboardAutoPaste(enabled: boolean): $CancellablePromise<prefs$0.Settings> {
+    return $Call.ByID(3749239618, enabled);
+}
+
+/**
+ * SetClipboardExcludedApps replaces the exclusion list.
+ */
+export function SetClipboardExcludedApps(apps: string[] | null): $CancellablePromise<prefs$0.Settings> {
+    return $Call.ByID(3818069478, apps);
+}
+
+/**
+ * SetClipboardHistoryLimit changes how many entries the history keeps.
+ */
+export function SetClipboardHistoryLimit(limit: number): $CancellablePromise<prefs$0.Settings> {
+    return $Call.ByID(3150497955, limit);
+}
+
+/**
  * SetClipboardHotkeyEnabled binds or releases the global clipboard shortcut.
  */
 export function SetClipboardHotkeyEnabled(enabled: boolean): $CancellablePromise<prefs$0.Settings> {
@@ -45,10 +67,25 @@ export function SetClipboardHotkeyEnabled(enabled: boolean): $CancellablePromise
 }
 
 /**
+ * SetClipboardImageMaxBytes changes the largest image accepted into history.
+ */
+export function SetClipboardImageMaxBytes(bytes: number): $CancellablePromise<prefs$0.Settings> {
+    return $Call.ByID(2197885520, bytes);
+}
+
+/**
  * SetClipboardPaused stops or resumes recording new clipboard entries.
  */
 export function SetClipboardPaused(paused: boolean): $CancellablePromise<prefs$0.Settings> {
     return $Call.ByID(1185644826, paused);
+}
+
+/**
+ * SetClipboardPreviewBytes changes the largest text shipped to the clipboard
+ * panel.
+ */
+export function SetClipboardPreviewBytes(bytes: number): $CancellablePromise<prefs$0.Settings> {
+    return $Call.ByID(3861692991, bytes);
 }
 
 /**

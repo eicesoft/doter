@@ -5,6 +5,7 @@ package clipboard
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"image"
 	"image/png"
 	"os"
@@ -17,8 +18,8 @@ import (
 )
 
 // The golang.design/x/clipboard backend is pure Go on Windows, X11 and
-// Wayland. Rich pasteboard formats stay macOS-only; Windows and Linux get
-// text and PNG images, which cover the common copy/paste flows.
+// Wayland. Text, image, HTML and RTF representations are captured; the source
+// app comes from the platform-specific helper.
 
 var (
 	libInitOnce sync.Once
@@ -58,12 +59,6 @@ func isSensitive() bool {
 	defer cancel()
 	sensitive, err := libclip.Sensitive(ctx)
 	return err == nil && sensitive
-}
-
-func frontmostApp() appInfo {
-	// Neither backend exposes the source application reliably. The sensitive
-	// marker still covers password managers on both platforms.
-	return appInfo{}
 }
 
 func imagePrimary() bool {
@@ -129,15 +124,83 @@ func thumbnailPNG(data []byte, maxDim int) ([]byte, bool) {
 	return buf.Bytes(), true
 }
 
-// Rich pasteboard formats are not captured on Windows/Linux yet. Returning
-// no blob makes WriteBack fall back to plain text, which is lossless for the
-// text itself.
-func readFormats() (blob []byte, rich bool, ok bool) {
-	return nil, false, false
+// storedFormats is the platform-independent rich-text payload kept with an
+// entry. HTML and RTF are opaque native bytes: Windows stores CF_HTML, X11
+// and Wayland store text/html, and both round-trip unchanged.
+type storedFormats struct {
+	Text string `json:"text,omitempty"`
+	HTML []byte `json:"html,omitempty"`
+	RTF  []byte `json:"rtf,omitempty"`
 }
 
-func WriteFormats([]byte) bool {
-	return false
+// maxRichBytes keeps a pathological clipboard (a whole web archive) from
+// bloating the history file.
+const maxRichBytes = 1 << 20
+
+func rtfFormat() libclip.Format {
+	return libclip.Register("text/rtf")
+}
+
+// readFormats captures styled representations. Plain text is included so
+// WriteFormats can publish all representations in one clipboard write.
+func readFormats() (blob []byte, rich bool, ok bool) {
+	if ensureClipboard() != nil {
+		return nil, false, false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var formats storedFormats
+	if text, err := libclip.Read(ctx, libclip.FmtText); err == nil {
+		formats.Text = string(text)
+	}
+	if html, err := libclip.Read(ctx, htmlFormat()); err == nil && len(html) <= maxRichBytes {
+		formats.HTML = html
+	}
+	if rtf, err := libclip.Read(ctx, rtfFormat()); err == nil && len(rtf) <= maxRichBytes {
+		formats.RTF = rtf
+	}
+	if len(formats.HTML) == 0 && len(formats.RTF) == 0 {
+		return nil, false, false
+	}
+
+	data, err := json.Marshal(formats)
+	if err != nil {
+		return nil, false, false
+	}
+	return data, true, true
+}
+
+// WriteFormats publishes the plain, HTML and RTF representations together so
+// each consumer picks the richest type it understands.
+func WriteFormats(blob []byte) bool {
+	if len(blob) == 0 || ensureClipboard() != nil {
+		return false
+	}
+	var formats storedFormats
+	if err := json.Unmarshal(blob, &formats); err != nil {
+		return false
+	}
+
+	items := make([]libclip.Option, 0, 3)
+	if len(formats.HTML) > 0 {
+		items = append(items, libclip.Item{Format: htmlFormat(), Bytes: formats.HTML})
+	}
+	if len(formats.RTF) > 0 {
+		items = append(items, libclip.Item{Format: rtfFormat(), Bytes: formats.RTF})
+	}
+	if formats.Text != "" {
+		items = append(items, libclip.Item{Format: libclip.FmtText, Bytes: []byte(formats.Text)})
+	}
+	if len(items) == 0 {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := libclip.WriteAll(ctx, items...)
+	return err == nil
 }
 
 func WriteImageFile(path string) bool {

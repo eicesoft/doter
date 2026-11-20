@@ -1,6 +1,8 @@
 .task
 .wails
 bin
+# `go build .` / `wails3 build` drop the app binary here.
+/doter
 frontend/dist
 frontend/node_modules
 build/*

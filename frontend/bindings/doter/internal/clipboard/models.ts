@@ -12,7 +12,7 @@ export interface Entry {
     "id": string;
 
     /**
-     * Content is the clipboard text, truncated to MaxContentBytes.
+     * Content is the clipboard text, truncated to the configured preview size.
      */
     "content": string;
 

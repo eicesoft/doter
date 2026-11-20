@@ -40,6 +40,15 @@ export function GetHistory(): $CancellablePromise<clipboard$0.Entry[] | null> {
 }
 
 /**
+ * Paste sends the platform's paste shortcut to the application that was
+ * frontmost when the clipboard was opened. The caller writes the entry back
+ * first, then collapses the island, then calls Paste.
+ */
+export function Paste(): $CancellablePromise<void> {
+    return $Call.ByID(2154300028);
+}
+
+/**
  * Pin toggles the pinned flag of an entry, keeping it at the top of the list.
  */
 export function Pin(id: string): $CancellablePromise<boolean> {

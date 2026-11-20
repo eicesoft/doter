@@ -17,19 +17,12 @@ import (
 	"unicode/utf8"
 )
 
-// MaxHistory is the number of entries kept. Older entries are dropped.
-const MaxHistory = 100
-
-// MaxContentBytes is the largest content shipped to the frontend. The full
-// text stays in the Go side so writing an entry back is lossless.
-const MaxContentBytes = 4096
-
 // Entry is one clipboard item.
 type Entry struct {
 	// ID is a stable hash of the content, so the same text keeps the same
 	// React key and can be de-duplicated.
 	ID string `json:"id"`
-	// Content is the clipboard text, truncated to MaxContentBytes.
+	// Content is the clipboard text, truncated to the configured preview size.
 	Content string `json:"content"`
 	// Kind is "text", "url", "color" or "image". Image entries carry a
 	// small PNG thumbnail as Content; the full image lives on disk.
@@ -72,16 +65,41 @@ type History struct {
 	path    string
 	// imageDir holds the full-size PNGs of image entries, named by entry id.
 	imageDir string
+	// maxEntries and previewBytes are user-configurable; List applies the
+	// preview size on the fly so changing it does not rewrite the store.
+	maxEntries   int
+	previewBytes int
 }
 
 // NewHistory creates a history and loads any previously saved entries.
 func NewHistory(path string) *History {
 	h := &History{
-		path:     path,
-		imageDir: filepath.Join(filepath.Dir(path), "clipboard-images"),
+		path:         path,
+		imageDir:     filepath.Join(filepath.Dir(path), "clipboard-images"),
+		maxEntries:   DefaultMaxEntries,
+		previewBytes: DefaultPreviewBytes,
 	}
 	h.load()
 	return h
+}
+
+// SetLimits applies the configured history cap and frontend preview size.
+// Lowering the cap drops the oldest entries immediately; only the new preview
+// size applies to already stored entries, since their full text is kept.
+func (h *History) SetLimits(maxEntries, previewBytes int) {
+	if maxEntries <= 0 {
+		maxEntries = DefaultMaxEntries
+	}
+	if previewBytes <= 0 {
+		previewBytes = DefaultPreviewBytes
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.maxEntries = maxEntries
+	h.previewBytes = previewBytes
+	h.trimLocked()
+	h.saveLocked()
 }
 
 // List returns the entries: pinned ones first, then the rest by recency.
@@ -90,14 +108,21 @@ func (h *History) List() []Entry {
 	defer h.mu.RUnlock()
 
 	result := make([]Entry, 0, len(h.entries))
+	appendEntry := func(e storedEntry) {
+		out := e.Entry
+		if out.Kind != "image" {
+			out.Content = truncate(e.Full, h.previewBytes)
+		}
+		result = append(result, out)
+	}
 	for _, e := range h.entries {
 		if e.Pinned {
-			result = append(result, e.Entry)
+			appendEntry(e)
 		}
 	}
 	for _, e := range h.entries {
 		if !e.Pinned {
-			result = append(result, e.Entry)
+			appendEntry(e)
 		}
 	}
 	return result
@@ -123,7 +148,7 @@ func (h *History) AddRich(content, kind string, formats []byte, rich bool, sourc
 	return h.insertLocked(storedEntry{
 		Entry: Entry{
 			ID:         hashID(content),
-			Content:    truncate(content, MaxContentBytes),
+			Content:    truncate(content, h.previewBytes),
 			Kind:       kind,
 			CreatedAt:  time.Now().UnixMilli(),
 			ContentLen: len(content),
@@ -292,15 +317,18 @@ func removeImage(e storedEntry) {
 	}
 }
 
-// trimLocked drops the oldest entries beyond MaxHistory.
+// trimLocked drops the oldest entries beyond the configured cap.
 func (h *History) trimLocked() {
-	if len(h.entries) <= MaxHistory {
+	if h.maxEntries <= 0 {
+		h.maxEntries = DefaultMaxEntries
+	}
+	if len(h.entries) <= h.maxEntries {
 		return
 	}
-	for _, e := range h.entries[MaxHistory:] {
+	for _, e := range h.entries[h.maxEntries:] {
 		removeImage(e)
 	}
-	h.entries = h.entries[:MaxHistory]
+	h.entries = h.entries[:h.maxEntries]
 }
 
 func (h *History) load() {

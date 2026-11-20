@@ -5,6 +5,7 @@ import {
   Clear,
   Delete,
   GetHistory,
+  Paste,
   Pin,
   WriteBack,
 } from "../../bindings/doter/internal/services/clipboardservice";
@@ -20,6 +21,7 @@ export function useClipboard(): {
   remove: (id: string) => void;
   clear: () => void;
   copy: (id: string) => Promise<boolean>;
+  paste: () => Promise<boolean>;
 } {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,17 +30,21 @@ export function useClipboard(): {
   useEffect(() => {
     let mounted = true;
 
-    GetHistory()
-      .then((list) => {
-        if (!mounted) return;
-        setEntries(list ?? []);
-      })
-      .catch(() => {
-        // The window can mount before the backend is ready in dev mode.
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+    const load = () => {
+      GetHistory()
+        .then((list) => {
+          if (!mounted) return;
+          setEntries(list ?? []);
+        })
+        .catch(() => {
+          // The window can mount before the backend is ready in dev mode.
+        })
+        .finally(() => {
+          if (mounted) setLoading(false);
+        });
+    };
+
+    load();
 
     // The backend pushes one entry per pasteboard change.
     const unsubscribe = Events.On("clipboard:update", (event) => {
@@ -54,9 +60,15 @@ export function useClipboard(): {
       });
     });
 
+    // Limits and preview size changed in settings: reload from the backend.
+    const unsubscribeConfig = Events.On("clipboard:config", () => {
+      if (mounted) load();
+    });
+
     return () => {
       mounted = false;
       unsubscribe();
+      unsubscribeConfig();
     };
   }, []);
 
@@ -87,6 +99,7 @@ export function useClipboard(): {
   }, []);
 
   const copy = useCallback((id: string) => WriteBack(id).catch(() => false), []);
+  const paste = useCallback(() => Paste().then(() => true).catch(() => false), []);
 
-  return { entries, loading, search, setSearch, togglePin, remove, clear, copy };
+  return { entries, loading, search, setSearch, togglePin, remove, clear, copy, paste };
 }

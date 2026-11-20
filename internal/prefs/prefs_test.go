@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"doter/internal/clipboard"
 )
 
 func TestDefaultsWhenFileIsMissing(t *testing.T) {
@@ -60,5 +62,45 @@ func TestCorruptFileFallsBackToDefaults(t *testing.T) {
 	if !got.AlertsEnabled || got.ClipboardPaused || !got.ClipboardHotkeyEnabled ||
 		got.Autostart || !got.HideOnFullscreen {
 		t.Fatalf("corrupt file should use defaults, got %+v", got)
+	}
+}
+
+func TestClipboardSettingsClampAndPersist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	store := New(path)
+
+	got := store.SetClipboardHistoryLimit(1)
+	if got.ClipboardHistoryLimit != clipboard.MinMaxEntries {
+		t.Fatalf("history limit = %d, want %d", got.ClipboardHistoryLimit, clipboard.MinMaxEntries)
+	}
+	store.SetClipboardPreviewBytes(1)
+	store.SetClipboardImageMaxBytes(1)
+	apps := store.SetClipboardExcludedApps([]string{" Slack ", "slack", "", "1Password"})
+
+	if apps.ClipboardPreviewBytes != clipboard.MinPreviewBytes {
+		t.Fatalf("preview bytes = %d", apps.ClipboardPreviewBytes)
+	}
+	if apps.ClipboardImageMaxBytes != clipboard.MinImageMaxBytes {
+		t.Fatalf("image max = %d", apps.ClipboardImageMaxBytes)
+	}
+	if len(apps.ClipboardExcludedApps) != 2 {
+		t.Fatalf("excluded apps = %v", apps.ClipboardExcludedApps)
+	}
+
+	reloaded := New(path).Get()
+	if reloaded.ClipboardHistoryLimit != clipboard.MinMaxEntries ||
+		reloaded.ClipboardPreviewBytes != clipboard.MinPreviewBytes ||
+		reloaded.ClipboardImageMaxBytes != clipboard.MinImageMaxBytes ||
+		len(reloaded.ClipboardExcludedApps) != 2 {
+		t.Fatalf("reloaded clipboard settings = %+v", reloaded)
+	}
+}
+
+func TestClipboardExcludedAppsCopyIsIsolated(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "settings.json"))
+	apps := store.Get().ClipboardExcludedApps
+	apps[0] = "mutated"
+	if store.Get().ClipboardExcludedApps[0] != clipboard.DefaultExcludedApps()[0] {
+		t.Fatal("Get must not expose the backing slice")
 	}
 }

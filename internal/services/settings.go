@@ -12,19 +12,21 @@ import (
 type SettingsService struct {
 	app             *application.App
 	store           *prefs.Store
+	history         *clipboard.History
 	watcher         *clipboard.Watcher
 	onAlertsEnabled func()
 	onHotkeyChanged func(bool)
 }
 
 // NewSettingsService creates the service and applies the persisted clipboard
-// pause flag to the watcher before it starts polling. onAlertsEnabled is
-// called when the user turns alerts back on, so the platform can ask for
-// notification permission. onHotkeyChanged binds or releases the global
-// clipboard shortcut.
+// settings to the history and watcher before they start working.
+// onAlertsEnabled is called when the user turns alerts back on, so the platform
+// can ask for notification permission. onHotkeyChanged binds or releases the
+// global clipboard shortcut.
 func NewSettingsService(
 	app *application.App,
 	store *prefs.Store,
+	history *clipboard.History,
 	watcher *clipboard.Watcher,
 	onAlertsEnabled func(),
 	onHotkeyChanged func(bool),
@@ -32,6 +34,7 @@ func NewSettingsService(
 	service := &SettingsService{
 		app:             app,
 		store:           store,
+		history:         history,
 		watcher:         watcher,
 		onAlertsEnabled: onAlertsEnabled,
 		onHotkeyChanged: onHotkeyChanged,
@@ -39,7 +42,28 @@ func NewSettingsService(
 	if watcher != nil {
 		watcher.SetPaused(store.Get().ClipboardPaused)
 	}
+	service.applyClipboardSettings(store.Get())
 	return service
+}
+
+// applyClipboardSettings pushes the limits and exclusions into the runtime
+// components.
+func (s *SettingsService) applyClipboardSettings(settings prefs.Settings) {
+	if s.history != nil {
+		s.history.SetLimits(settings.ClipboardHistoryLimit, settings.ClipboardPreviewBytes)
+	}
+	if s.watcher != nil {
+		s.watcher.SetImageMaxBytes(settings.ClipboardImageMaxBytes)
+		s.watcher.SetExcludedApps(settings.ClipboardExcludedApps)
+	}
+}
+
+// notifyClipboardConfig tells the open clipboard panel to reload its list after
+// a limit or exclusion change.
+func (s *SettingsService) notifyClipboardConfig() {
+	if s.app != nil {
+		s.app.Event.Emit(EventClipboardConfig)
+	}
 }
 
 // Get returns the current backend preferences.
@@ -71,6 +95,45 @@ func (s *SettingsService) SetClipboardHotkeyEnabled(enabled bool) prefs.Settings
 	if s.onHotkeyChanged != nil {
 		s.onHotkeyChanged(enabled)
 	}
+	return settings
+}
+
+// SetClipboardHistoryLimit changes how many entries the history keeps.
+func (s *SettingsService) SetClipboardHistoryLimit(limit int) prefs.Settings {
+	settings := s.store.SetClipboardHistoryLimit(limit)
+	s.applyClipboardSettings(settings)
+	s.notifyClipboardConfig()
+	return settings
+}
+
+// SetClipboardPreviewBytes changes the largest text shipped to the clipboard
+// panel.
+func (s *SettingsService) SetClipboardPreviewBytes(bytes int) prefs.Settings {
+	settings := s.store.SetClipboardPreviewBytes(bytes)
+	s.applyClipboardSettings(settings)
+	s.notifyClipboardConfig()
+	return settings
+}
+
+// SetClipboardImageMaxBytes changes the largest image accepted into history.
+func (s *SettingsService) SetClipboardImageMaxBytes(bytes int64) prefs.Settings {
+	settings := s.store.SetClipboardImageMaxBytes(bytes)
+	s.applyClipboardSettings(settings)
+	s.notifyClipboardConfig()
+	return settings
+}
+
+// SetClipboardAutoPaste toggles pasting the selected entry into the previous
+// application.
+func (s *SettingsService) SetClipboardAutoPaste(enabled bool) prefs.Settings {
+	return s.store.SetClipboardAutoPaste(enabled)
+}
+
+// SetClipboardExcludedApps replaces the exclusion list.
+func (s *SettingsService) SetClipboardExcludedApps(apps []string) prefs.Settings {
+	settings := s.store.SetClipboardExcludedApps(apps)
+	s.applyClipboardSettings(settings)
+	s.notifyClipboardConfig()
 	return settings
 }
 

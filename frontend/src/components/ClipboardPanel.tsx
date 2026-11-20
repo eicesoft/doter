@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Entry } from "../../bindings/doter/internal/clipboard/models";
 import { useClipboard } from "../hooks/useClipboard";
+import { Card } from "./Card";
 import { formatBytes, formatRelTime } from "../lib/format";
 
 const strokeProps = {
@@ -17,21 +18,28 @@ interface ClipboardPanelProps {
   onFocusIsland: () => void;
   paused: boolean;
   onTogglePause: () => void;
+  autoPaste: boolean;
   onDismiss: () => void;
 }
+
+/** Let the island collapse before the synthetic paste targets another app. */
+const AUTO_PASTE_DELAY_MS = 520;
 
 /** The clipboard history tab. */
 export function ClipboardPanel({
   onFocusIsland,
   paused,
   onTogglePause,
+  autoPaste,
   onDismiss,
 }: ClipboardPanelProps) {
-  const { entries, loading, search, setSearch, togglePin, remove, clear, copy } =
+  const { entries, loading, search, setSearch, togglePin, remove, clear, copy, paste } =
     useClipboard();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pasteFailed, setPasteFailed] = useState(false);
   const [cursor, setCursor] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const pasteTimer = useRef<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   const filtered = useMemo(() => {
@@ -52,14 +60,32 @@ export function ClipboardPanel({
 
   const handleCopy = useCallback(
     async (id: string) => {
+      setPasteFailed(false);
       const ok = await copy(id);
       if (!ok) return false;
       setCopiedId(id);
       window.setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1_500);
+
+      if (autoPaste) {
+        onDismiss();
+        if (pasteTimer.current !== null) window.clearTimeout(pasteTimer.current);
+        pasteTimer.current = window.setTimeout(() => {
+          pasteTimer.current = null;
+          void paste().then((sent) => {
+            if (!sent) setPasteFailed(true);
+          });
+        }, AUTO_PASTE_DELAY_MS);
+      }
       return true;
     },
-    [copy],
+    [autoPaste, copy, onDismiss, paste],
   );
+
+  useEffect(() => {
+    return () => {
+      if (pasteTimer.current !== null) window.clearTimeout(pasteTimer.current);
+    };
+  }, []);
 
   // A new copy or a different filter starts at the top of the list.
   useEffect(() => {
@@ -141,9 +167,12 @@ export function ClipboardPanel({
   };
 
   return (
-    <div className="clipboard-panel">
-      <div className="clipboard-toolbar">
-        <div className="clipboard-search">
+    <Card
+      label="Clipboard"
+      accent="var(--accent-disk)"
+      wide
+      inline={
+        <div className="clipboard-search clipboard-search-head">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <circle cx="11" cy="11" r="6.5" />
             <path d="M16 16l4.5 4.5" />
@@ -167,24 +196,30 @@ export function ClipboardPanel({
             </button>
           )}
         </div>
-        <button
-          type="button"
-          className={paused ? "clipboard-clear is-active" : "clipboard-clear"}
-          onClick={onTogglePause}
-          aria-pressed={paused}
-          title={paused ? "继续记录剪贴板" : "暂停记录剪贴板"}
-        >
-          {paused ? "继续" : "暂停"}
-        </button>
-        <button
-          type="button"
-          className="clipboard-clear"
-          onClick={clear}
-          disabled={entries.length === 0}
-        >
-          清空
-        </button>
-      </div>
+      }
+      actions={
+        <>
+          <button
+            type="button"
+            className={paused ? "clipboard-clear is-active" : "clipboard-clear"}
+            onClick={onTogglePause}
+            aria-pressed={paused}
+            title={paused ? "继续记录剪贴板" : "暂停记录剪贴板"}
+          >
+            {paused ? "继续" : "暂停"}
+          </button>
+          <button
+            type="button"
+            className="clipboard-clear"
+            onClick={clear}
+            disabled={entries.length === 0}
+          >
+            清空
+          </button>
+        </>
+      }
+    >
+      <div className="clipboard-panel">
 
       {paused && (
         <div className="clipboard-paused" role="status">
@@ -192,6 +227,12 @@ export function ClipboardPanel({
           <button type="button" onClick={onTogglePause}>
             继续记录
           </button>
+        </div>
+      )}
+
+      {pasteFailed && (
+        <div className="clipboard-paste-error" role="status">
+          <span>自动粘贴失败，内容已复制到剪贴板。请检查辅助功能权限或 xdotool。</span>
         </div>
       )}
 
@@ -243,7 +284,8 @@ export function ClipboardPanel({
           <path d="M6.4 11.6 12 6l5.6 5.6" />
         </svg>
       </button>
-    </div>
+      </div>
+    </Card>
   );
 }
 
@@ -281,7 +323,15 @@ function ClipboardRow({
         onClick={onCopy}
         title={entry.rich ? "点击复制，保留原始格式" : "点击复制到剪贴板"}
       >
-        <span className={entry.kind === "url" ? "clip-kind is-url" : "clip-kind"}>
+        <span
+          className={
+            entry.kind === "url"
+              ? "clip-kind is-url"
+              : isImage
+                ? "clip-kind is-image"
+                : "clip-kind"
+          }
+        >
           {entry.kind === "url" ? (
             <svg viewBox="0 0 24 24" {...strokeProps}>
               <path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5L12 7" />

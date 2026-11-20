@@ -12,8 +12,20 @@ const REFRESH_MS = 10 * 60_000;
 /** Wait for the typing to settle before hitting the geocoding API. */
 const SEARCH_DEBOUNCE_MS = 300;
 
-/** The weather forecast, refreshed every ten minutes. */
-export function useWeather() {
+/** Everything the weather UI needs: the forecast plus the city search. */
+export interface WeatherController {
+  forecast: Forecast | null;
+  loading: boolean;
+  failed: boolean;
+  query: string;
+  setQuery: (query: string) => void;
+  results: Location[];
+  choose: (location: Location) => void;
+}
+
+/** The weather forecast, refreshed every ten minutes. It lives on the app
+    level so the idle pill can show the temperature without the panel mounted. */
+export function useWeather(): WeatherController {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);

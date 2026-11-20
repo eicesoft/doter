@@ -16,7 +16,8 @@ export type CollapsedMetric =
   | "network"
   | "battery"
   | "agents"
-  | "clock";
+  | "clock"
+  | "weather";
 
 export interface Settings {
   /** Expand the island when the pointer enters it. */
@@ -57,6 +58,7 @@ export const COLLAPSED_OPTIONS: readonly { key: CollapsedMetric; label: string }
   { key: "battery", label: "电池" },
   { key: "agents", label: "Agent" },
   { key: "clock", label: "时钟" },
+  { key: "weather", label: "天气" },
 ];
 
 const COLLAPSED_KEYS = new Set<CollapsedMetric>(COLLAPSED_OPTIONS.map((option) => option.key));
@@ -73,7 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
     system: true,
     processes: true,
   },
-  collapsed: ["cpu", "memory"],
+  collapsed: ["cpu", "weather"],
 };
 
 const STORAGE_KEY = "doter:settings:v1";

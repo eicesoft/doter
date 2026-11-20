@@ -11,9 +11,10 @@ import (
 func TestSettingsServicePersistsAndAppliesClipboardPause(t *testing.T) {
 	dir := t.TempDir()
 	store := prefs.New(filepath.Join(dir, "settings.json"))
-	watcher := clipboard.NewWatcher(clipboard.NewHistory(filepath.Join(dir, "clipboard.json")))
+	history := clipboard.NewHistory(filepath.Join(dir, "clipboard.json"))
+	watcher := clipboard.NewWatcher(history)
 	var hotkeyEnabled bool
-	service := NewSettingsService(nil, store, watcher, nil, func(enabled bool) {
+	service := NewSettingsService(nil, store, history, watcher, nil, func(enabled bool) {
 		hotkeyEnabled = enabled
 	})
 
@@ -46,6 +47,22 @@ func TestSettingsServicePersistsAndAppliesClipboardPause(t *testing.T) {
 	service.SetHideOnFullscreen(false)
 	if store.Get().HideOnFullscreen {
 		t.Fatal("fullscreen flag was not persisted")
+	}
+
+	for i := range 20 {
+		history.Add(string(rune('a'+i)), "text")
+	}
+	service.SetClipboardHistoryLimit(10)
+	if got := len(history.List()); got != 10 {
+		t.Fatalf("history limit was not applied, got %d entries", got)
+	}
+	service.SetClipboardPreviewBytes(1024)
+	if got := store.Get().ClipboardPreviewBytes; got != 1024 {
+		t.Fatalf("preview bytes = %d", got)
+	}
+	service.SetClipboardExcludedApps([]string{"Slack.exe"})
+	if got := store.Get().ClipboardExcludedApps; len(got) != 1 || got[0] != "Slack.exe" {
+		t.Fatalf("excluded apps = %v", got)
 	}
 
 	if _, err := service.SetAutostart(true); err != nil {

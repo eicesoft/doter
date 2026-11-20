@@ -6,16 +6,13 @@ import (
 	"encoding/base64"
 	"image/png"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 // PollInterval is how often the pasteboard's change counter is checked.
 const PollInterval = 400 * time.Millisecond
-
-// MaxImageBytes bounds what is stored. Screenshots are a few megabytes;
-// anything larger is not something worth keeping in a history.
-const MaxImageBytes = 16 << 20
 
 // ThumbnailSize is the longest side, in pixels, of the preview shipped to the
 // frontend for an image entry.
@@ -30,6 +27,10 @@ type Watcher struct {
 	// already on the pasteboard.
 	lastSeen int64
 	paused   atomic.Bool
+
+	configMu sync.RWMutex
+	excluded map[string]struct{}
+	imageMax int64
 }
 
 // appInfo describes the frontmost application at copy time.
@@ -38,27 +39,51 @@ type appInfo struct {
 	Name string
 }
 
-// excludedSources are apps whose pasteboard content is never recorded, as a
-// second line of defence for managers that do not set the standard macOS
-// concealed/transient markers.
-var excludedSources = map[string]bool{
-	"com.1password.1password":    true,
-	"com.agilebits.onepassword7": true,
-	"com.apple.keychainaccess":   true,
-	"com.apple.passwords":        true,
-	"com.bitwarden.desktop":      true,
-	"com.dashlane.dashlane":      true,
-	"com.lastpass.lastpass":      true,
-	"org.keepassxc.keepassxc":    true,
-}
-
 // NewWatcher creates a watcher over the given history.
 func NewWatcher(history *History) *Watcher {
-	return &Watcher{
+	w := &Watcher{
 		history:  history,
 		updates:  make(chan Entry, 8),
 		lastSeen: -1,
+		imageMax: DefaultImageMaxBytes,
 	}
+	w.SetExcludedApps(DefaultExcludedApps())
+	return w
+}
+
+// SetExcludedApps replaces the list of apps whose clipboard content is never
+// recorded. Entries match the source app's bundle identifier, process name or
+// executable name, case-insensitively.
+func (w *Watcher) SetExcludedApps(apps []string) {
+	excluded := make(map[string]struct{}, len(apps))
+	for _, app := range apps {
+		if key := normalizeAppName(app); key != "" {
+			excluded[key] = struct{}{}
+		}
+	}
+
+	w.configMu.Lock()
+	w.excluded = excluded
+	w.configMu.Unlock()
+}
+
+// SetImageMaxBytes bounds what image data is stored.
+func (w *Watcher) SetImageMaxBytes(limit int64) {
+	if limit <= 0 {
+		limit = DefaultImageMaxBytes
+	}
+	w.configMu.Lock()
+	w.imageMax = limit
+	w.configMu.Unlock()
+}
+
+func (w *Watcher) imageLimit() int64 {
+	w.configMu.RLock()
+	defer w.configMu.RUnlock()
+	if w.imageMax <= 0 {
+		return DefaultImageMaxBytes
+	}
+	return w.imageMax
 }
 
 // Updates yields an entry whenever the pasteboard changes.
@@ -96,12 +121,15 @@ func (w *Watcher) poll() {
 		return
 	}
 	w.lastSeen = count
+	// Track the app the user copied from, so auto-paste can return focus to
+	// it after the island closes.
+	rememberTarget()
 
 	if w.Paused() || isSensitive() {
 		return
 	}
 	source := frontmostApp()
-	if isExcludedSource(source) {
+	if w.excludedSource(source) {
 		return
 	}
 
@@ -123,10 +151,29 @@ func (w *Watcher) poll() {
 	w.emit(entry)
 }
 
-// isExcludedSource reports whether the frontmost app is a password manager or
-// another app whose clipboard content must never be recorded.
-func isExcludedSource(source appInfo) bool {
-	return source.ID != "" && excludedSources[strings.ToLower(source.ID)]
+// excludedSource reports whether the source app is on the user's exclusion
+// list. The list matches bundle identifiers, process names and executable
+// names; .exe is ignored so one entry covers Windows and Unix conventions.
+func (w *Watcher) excludedSource(source appInfo) bool {
+	w.configMu.RLock()
+	defer w.configMu.RUnlock()
+
+	for _, candidate := range []string{source.ID, source.Name} {
+		key := normalizeAppName(candidate)
+		if key == "" {
+			continue
+		}
+		if _, ok := w.excluded[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeAppName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.TrimSuffix(name, ".exe")
+	return name
 }
 
 // captureImage records the pasteboard image, if that is its primary content.
@@ -135,7 +182,7 @@ func (w *Watcher) captureImage(source string) (Entry, bool) {
 		return Entry{}, false
 	}
 	data, ok := readImage()
-	if !ok || len(data) > MaxImageBytes {
+	if !ok || len(data) > int(w.imageLimit()) {
 		return Entry{}, false
 	}
 	thumbnail, ok := thumbnailPNG(data, ThumbnailSize)

@@ -21,6 +21,31 @@ export interface Settings {
     "clipboardHotkeyEnabled": boolean;
 
     /**
+     * ClipboardHistoryLimit bounds how many entries are kept.
+     */
+    "clipboardHistoryLimit": number;
+
+    /**
+     * ClipboardPreviewBytes is the largest text shipped to the webview.
+     */
+    "clipboardPreviewBytes": number;
+
+    /**
+     * ClipboardImageMaxBytes rejects larger images at capture time.
+     */
+    "clipboardImageMaxBytes": number;
+
+    /**
+     * ClipboardAutoPaste pastes the chosen entry into the previous app.
+     */
+    "clipboardAutoPaste": boolean;
+
+    /**
+     * ClipboardExcludedApps lists bundle ids or process names never recorded.
+     */
+    "clipboardExcludedApps": string[] | null;
+
+    /**
      * Autostart launches Doter at login.
      */
     "autostart": boolean;

@@ -4,8 +4,13 @@ import {
   Get,
   SetAlertsEnabled,
   SetAutostart,
+  SetClipboardAutoPaste,
+  SetClipboardExcludedApps,
+  SetClipboardHistoryLimit,
   SetClipboardHotkeyEnabled,
+  SetClipboardImageMaxBytes,
   SetClipboardPaused,
+  SetClipboardPreviewBytes,
   SetHideOnFullscreen,
 } from "../../bindings/doter/internal/services/settingsservice";
 import type { Settings } from "../../bindings/doter/internal/prefs/models";
@@ -16,6 +21,11 @@ function fallback(): Settings {
     alertsEnabled: true,
     clipboardPaused: false,
     clipboardHotkeyEnabled: true,
+    clipboardHistoryLimit: 100,
+    clipboardPreviewBytes: 4096,
+    clipboardImageMaxBytes: 16 << 20,
+    clipboardAutoPaste: false,
+    clipboardExcludedApps: [],
     autostart: false,
     hideOnFullscreen: true,
   };
@@ -30,6 +40,11 @@ export function useBackendSettings(): {
   setAlertsEnabled: (enabled: boolean) => void;
   setClipboardPaused: (paused: boolean) => void;
   setClipboardHotkeyEnabled: (enabled: boolean) => void;
+  setClipboardHistoryLimit: (limit: number) => void;
+  setClipboardPreviewBytes: (bytes: number) => void;
+  setClipboardImageMaxBytes: (bytes: number) => void;
+  setClipboardAutoPaste: (enabled: boolean) => void;
+  setClipboardExcludedApps: (apps: string[]) => void;
   setAutostart: (enabled: boolean) => void;
   setHideOnFullscreen: (enabled: boolean) => void;
 } {
@@ -67,6 +82,36 @@ export function useBackendSettings(): {
       .catch(() => {});
   }, []);
 
+  const setClipboardHistoryLimit = useCallback((limit: number) => {
+    SetClipboardHistoryLimit(limit)
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  const setClipboardPreviewBytes = useCallback((bytes: number) => {
+    SetClipboardPreviewBytes(bytes)
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  const setClipboardImageMaxBytes = useCallback((bytes: number) => {
+    SetClipboardImageMaxBytes(bytes)
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  const setClipboardAutoPaste = useCallback((enabled: boolean) => {
+    SetClipboardAutoPaste(enabled)
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  const setClipboardExcludedApps = useCallback((apps: string[]) => {
+    SetClipboardExcludedApps(apps)
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
   const setAutostart = useCallback((enabled: boolean) => {
     SetAutostart(enabled)
       .then(setSettings)
@@ -84,6 +129,11 @@ export function useBackendSettings(): {
     setAlertsEnabled,
     setClipboardPaused,
     setClipboardHotkeyEnabled,
+    setClipboardHistoryLimit,
+    setClipboardPreviewBytes,
+    setClipboardImageMaxBytes,
+    setClipboardAutoPaste,
+    setClipboardExcludedApps,
     setAutostart,
     setHideOnFullscreen,
   };

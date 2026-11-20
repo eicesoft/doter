@@ -1,11 +1,14 @@
+import { useState } from "react";
 import type { CSSProperties } from "react";
 
-export type TabId = "overview" | "agents" | "weather" | "music" | "clipboard";
+export type TabId = "overview" | "calendar" | "agents" | "weather" | "music" | "clipboard";
 
 interface TabBarProps {
   active: TabId;
   onSelect: (id: TabId) => void;
   onFocusIsland: () => void;
+  /** The weather tab takes the current sky's colour while it is active. */
+  weatherAccent?: string;
 }
 
 const strokeProps = {
@@ -18,7 +21,7 @@ const strokeProps = {
 };
 
 /** Circular glass tab bar at the bottom of the expanded island. */
-export function TabBar({ active, onSelect, onFocusIsland }: TabBarProps) {
+export function TabBar({ active, onSelect, onFocusIsland, weatherAccent }: TabBarProps) {
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     {
       id: "overview",
@@ -32,12 +35,24 @@ export function TabBar({ active, onSelect, onFocusIsland }: TabBarProps) {
       ),
     },
     {
-      id: "agents",
-      label: "Agent 监控",
+      id: "calendar",
+      label: "日历",
       icon: (
         <svg viewBox="0 0 24 24" {...strokeProps}>
-          <rect x="3.5" y="4.5" width="17" height="15" rx="3.5" />
-          <path d="M7.5 9 10 11.5 7.5 14M12.5 15h4" />
+          <rect x="4" y="5.6" width="16" height="14.4" rx="3.2" />
+          <path d="M4 10h16M8.4 3v4M15.6 3v4" />
+          <path d="M8 14h2.2M13.8 14H16M8 17.2h2.2" />
+        </svg>
+      ),
+    },
+    {
+      id: "clipboard",
+      label: "剪切板",
+      icon: (
+        <svg viewBox="0 0 24 24" {...strokeProps}>
+          <path d="M15.8 4.2h2a2.6 2.6 0 0 1 2.6 2.6v12.6a2.6 2.6 0 0 1-2.6 2.6H6.2a2.6 2.6 0 0 1-2.6-2.6V6.8a2.6 2.6 0 0 1 2.6-2.6h2" />
+          <rect x="8.4" y="1.6" width="7.2" height="4.8" rx="1.8" />
+          <path d="M8.6 11h6.8M8.6 15h4.4" />
         </svg>
       ),
     },
@@ -64,13 +79,17 @@ export function TabBar({ active, onSelect, onFocusIsland }: TabBarProps) {
       ),
     },
     {
-      id: "clipboard",
-      label: "剪切板",
+      id: "agents",
+      label: "Agent 监控",
       icon: (
         <svg viewBox="0 0 24 24" {...strokeProps}>
-          <rect x="5" y="5" width="14" height="16" rx="3" />
-          <path d="M9.5 5V3.8h5V5" />
-          <path d="M9 12h6M9 16h4" />
+          <circle cx="12" cy="2.6" r="1" />
+          <path d="M12 3.6v2.6" />
+          <rect x="4.4" y="6.2" width="15.2" height="12.6" rx="3.4" />
+          <circle cx="9.1" cy="11.6" r="1.1" />
+          <circle cx="14.9" cy="11.6" r="1.1" />
+          <path d="M9.8 15.6h4.4" />
+          <path d="M2.5 10.6v3.4M21.5 10.6v3.4" />
         </svg>
       ),
     },
@@ -78,12 +97,70 @@ export function TabBar({ active, onSelect, onFocusIsland }: TabBarProps) {
 
   const activeIndex = tabs.findIndex((tab) => tab.id === active);
 
+  // One random glass recipe per app run: the rim angle, the sheen clusters and
+  // the turbulence seeds all shift, so the highlights never repeat exactly.
+  const [glass] = useState(() => ({
+    seed: Math.floor(Math.random() * 900) + 1,
+    rimAngle: Math.round(96 + Math.random() * 68),
+    conicAngle: Math.round(168 + Math.random() * 64),
+    x1: Math.round(8 + Math.random() * 18),
+    x2: Math.round(36 + Math.random() * 22),
+    x3: Math.round(60 + Math.random() * 20),
+    x4: Math.round(84 + Math.random() * 12),
+  }));
+
   return (
     <nav
       className="tabbar"
       role="tablist"
-      style={{ "--tab-index": activeIndex } as CSSProperties}
+      style={
+        {
+          "--tab-index": activeIndex,
+          "--glass-rim-angle": `${glass.rimAngle}deg`,
+          "--glass-conic-angle": `${glass.conicAngle}deg`,
+          "--glass-x1": `${glass.x1}%`,
+          "--glass-x2": `${glass.x2}%`,
+          "--glass-x3": `${glass.x3}%`,
+          "--glass-x4": `${glass.x4}%`,
+        } as CSSProperties
+      }
     >
+      {/* Organic refraction: turbulence displaces the rim and the specular
+          sheen, so neither reads as a perfect geometric gradient. */}
+      <svg className="tabbar-defs" aria-hidden="true" focusable="false">
+        <filter id="tabbar-liquid-rim" x="-15%" y="-25%" width="130%" height="150%" colorInterpolationFilters="sRGB">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.011 0.027"
+            numOctaves={2}
+            seed={glass.seed}
+            result="rimNoise"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="rimNoise"
+            scale={3.2}
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+        <filter id="tabbar-liquid-sheen" x="-20%" y="-30%" width="140%" height="160%" colorInterpolationFilters="sRGB">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.016 0.038"
+            numOctaves={2}
+            seed={(glass.seed * 7) % 997}
+            result="sheenNoise"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="sheenNoise"
+            scale={7}
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+      </svg>
       <span className="tab-indicator" aria-hidden="true" />
       {tabs.map((tab) => (
         <button
@@ -93,10 +170,22 @@ export function TabBar({ active, onSelect, onFocusIsland }: TabBarProps) {
           aria-selected={active === tab.id}
           className={active === tab.id ? "tab is-active" : "tab"}
           title={tab.label}
+          style={
+            tab.id === "weather" && active === tab.id && weatherAccent
+              ? { color: weatherAccent }
+              : undefined
+          }
           onPointerEnter={onFocusIsland}
           onPointerDown={(event) => {
             // The first click into an inactive window is swallowed by window
             // activation, so switch on pointerdown instead of click.
+            event.preventDefault();
+            event.stopPropagation();
+            onSelect(tab.id);
+          }}
+          onClick={(event) => {
+            // Fallback for the activation edge: if the pointerdown was
+            // consumed but the click still arrives, switch here too.
             event.preventDefault();
             event.stopPropagation();
             onSelect(tab.id);

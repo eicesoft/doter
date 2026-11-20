@@ -10,6 +10,10 @@ import (
 // changes.
 const EventClipboard = "clipboard:update"
 
+// EventClipboardConfig is emitted when limits or exclusions change, so an
+// open clipboard panel reloads its list.
+const EventClipboardConfig = "clipboard:config"
+
 // ClipboardService exposes the clipboard history to the frontend.
 //
 // The watcher itself is not part of this service: binding a method that
@@ -61,4 +65,11 @@ func (s *ClipboardService) WriteBack(id string) bool {
 		return false
 	}
 	return s.app.Clipboard.SetText(content)
+}
+
+// Paste sends the platform's paste shortcut to the application that was
+// frontmost when the clipboard was opened. The caller writes the entry back
+// first, then collapses the island, then calls Paste.
+func (s *ClipboardService) Paste() error {
+	return clipboard.Paste()
 }

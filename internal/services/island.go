@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"doter/internal/clipboard"
 	"doter/internal/notch"
 )
 
@@ -48,7 +49,13 @@ func (s *IslandService) ToggleVisible() bool {
 func (s *IslandService) IsVisible() bool { return s.ctrl.Visible() }
 
 // Focus activates the window so the webview receives keyboard events.
-func (s *IslandService) Focus() { s.ctrl.Focus() }
+func (s *IslandService) Focus() {
+	// Remember the app the user was in before the island takes focus, so
+	// clipboard auto-paste can return there even when the tab was opened by a
+	// click instead of the global shortcut.
+	clipboard.RememberTarget()
+	s.ctrl.Focus()
+}
 
 // Quit exits the application.
 func (s *IslandService) Quit() { s.app.Quit() }
