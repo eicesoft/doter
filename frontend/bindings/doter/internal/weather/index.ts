@@ -5,5 +5,6 @@ export type {
     Current,
     Day,
     Forecast,
-    Location
+    Location,
+    State
 } from "./models.js";

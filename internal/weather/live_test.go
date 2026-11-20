@@ -16,11 +16,15 @@ func TestLiveForecast(t *testing.T) {
 	defer cancel()
 
 	c := NewClient(t.TempDir() + "/weather.json")
-	f, err := c.Forecast(ctx)
+	st, err := c.State(ctx)
 	if err != nil {
-		t.Fatalf("Forecast: %v", err)
+		t.Fatalf("State: %v", err)
 	}
-	t.Logf("location=%+v current=%+v days=%d", f.Location, f.Current, len(f.Days))
+	if st.Forecast == nil {
+		t.Fatal("no forecast")
+	}
+	f := st.Forecast
+	t.Logf("cities=%+v active=%d current=%+v days=%d", st.Cities, st.Active, f.Current, len(f.Days))
 	if len(f.Days) == 0 {
 		t.Fatal("no daily forecast")
 	}

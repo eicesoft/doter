@@ -59,3 +59,14 @@ export interface Location {
     "lat": number;
     "lon": number;
 }
+
+/**
+ * State is the saved city list plus the forecast for the active city. The
+ * forecast is nil when the network request failed; the city list and active
+ * index still let the UI offer retry and city switching.
+ */
+export interface State {
+    "cities": Location[] | null;
+    "active": number;
+    "forecast"?: Forecast | null;
+}

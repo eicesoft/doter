@@ -1,6 +1,7 @@
 package weather
 
 import (
+	"os"
 	"testing"
 )
 
@@ -21,6 +22,76 @@ const sampleForecast = `{
     "precipitation_probability_max": [0, 80]
   }
 }`
+
+func TestLegacyLocationLoad(t *testing.T) {
+	path := t.TempDir() + "/weather.json"
+	legacy := `{"name":"上海","region":"上海市","country":"中国","lat":31.23,"lon":121.47}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatalf("write legacy file: %v", err)
+	}
+	c := NewClient(path)
+	if len(c.cities) != 1 || c.active != 0 {
+		t.Fatalf("cities=%+v active=%d, want the legacy location active", c.cities, c.active)
+	}
+	if got := c.cities[0].Name; got != "上海" {
+		t.Errorf("city name = %q, want 上海", got)
+	}
+}
+
+func TestCityListEditing(t *testing.T) {
+	path := t.TempDir() + "/weather.json"
+	c := NewClient(path)
+	beijing := Location{Name: "北京", Region: "北京市", Lat: 39.9042, Lon: 116.4074}
+	shanghai := Location{Name: "上海", Region: "上海市", Lat: 31.2304, Lon: 121.4737}
+
+	if st := c.AddCity(beijing); len(st.Cities) != 1 || st.Active != 0 {
+		t.Fatalf("after first add: cities=%d active=%d", len(st.Cities), st.Active)
+	}
+	if st := c.AddCity(shanghai); len(st.Cities) != 2 || st.Active != 1 {
+		t.Fatalf("after second add: cities=%d active=%d", len(st.Cities), st.Active)
+	}
+	// Adding an existing city selects it instead of duplicating it.
+	if st := c.AddCity(beijing); len(st.Cities) != 2 || st.Active != 0 {
+		t.Fatalf("after duplicate add: cities=%d active=%d", len(st.Cities), st.Active)
+	}
+
+	if st := c.StepCity(-1); st.Active != 1 {
+		t.Fatalf("step -1 wraps to %d, want 1", st.Active)
+	}
+	if st := c.StepCity(1); st.Active != 0 {
+		t.Fatalf("step +1 wraps to %d, want 0", st.Active)
+	}
+
+	if st := c.RemoveCity(0); len(st.Cities) != 1 || st.Active != 0 {
+		t.Fatalf("after removing first: cities=%d active=%d", len(st.Cities), st.Active)
+	}
+	if st := c.RemoveCity(0); len(st.Cities) != 0 || st.Active != 0 {
+		t.Fatalf("after removing last: cities=%d active=%d", len(st.Cities), st.Active)
+	}
+
+	// The empty list must survive a restart instead of falling back to the
+	// previous saved city.
+	reloaded := NewClient(path)
+	if len(reloaded.cities) != 0 {
+		t.Fatalf("reloaded cities=%+v, want none", reloaded.cities)
+	}
+}
+
+func TestCityListPersistence(t *testing.T) {
+	path := t.TempDir() + "/weather.json"
+	c := NewClient(path)
+	c.AddCity(Location{Name: "北京", Lat: 39.9042, Lon: 116.4074})
+	c.AddCity(Location{Name: "上海", Lat: 31.2304, Lon: 121.4737})
+	c.StepCity(-1)
+
+	reloaded := NewClient(path)
+	if len(reloaded.cities) != 2 || reloaded.active != 0 {
+		t.Fatalf("reloaded cities=%+v active=%d", reloaded.cities, reloaded.active)
+	}
+	if reloaded.cities[1].Name != "上海" {
+		t.Errorf("second city = %q, want 上海", reloaded.cities[1].Name)
+	}
+}
 
 func TestParseForecast(t *testing.T) {
 	loc := Location{Name: "上海", Lat: 31.23, Lon: 121.47}

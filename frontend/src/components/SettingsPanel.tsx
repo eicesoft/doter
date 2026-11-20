@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import type { Settings as BackendSettings } from "../../bindings/doter/internal/prefs/models";
 import { Check, Version } from "../../bindings/doter/internal/services/updateservice";
+import { SearchCities } from "../../bindings/doter/internal/services/weatherservice";
+import type { Location } from "../../bindings/doter/internal/weather/models";
 import {
   CARD_OPTIONS,
   COLLAPSED_OPTIONS,
@@ -18,6 +20,10 @@ interface SettingsPanelProps {
   settings: Settings;
   onChange: (next: Settings) => void;
   backendSettings: BackendSettings;
+  weatherCities: Location[];
+  weatherActive: number;
+  onAddWeatherCity: (location: Location) => void;
+  onRemoveWeatherCity: (index: number) => void;
   onSetAlertsEnabled: (enabled: boolean) => void;
   onSetClipboardPaused: (paused: boolean) => void;
   onSetClipboardHotkeyEnabled: (enabled: boolean) => void;
@@ -45,6 +51,10 @@ export function SettingsPanel({
   settings,
   onChange,
   backendSettings,
+  weatherCities,
+  weatherActive,
+  onAddWeatherCity,
+  onRemoveWeatherCity,
   onSetAlertsEnabled,
   onSetClipboardPaused,
   onSetClipboardHotkeyEnabled,
@@ -170,6 +180,18 @@ export function SettingsPanel({
                 ))}
                 <div className="settings-note">
                   「系统总览」始终显示，不能关闭。
+                </div>
+              </Group>
+
+              <Group title="天气城市">
+                <CityEditor
+                  cities={weatherCities}
+                  active={weatherActive}
+                  onAdd={onAddWeatherCity}
+                  onRemove={onRemoveWeatherCity}
+                />
+                <div className="settings-note">
+                  天气页的左右箭头切换城市；选中城市保存在 weather.json。
                 </div>
               </Group>
             </div>
@@ -418,6 +440,141 @@ function NumberRow({ label, value, min, max, unit, onCommit }: NumberRowProps) {
         <em>{unit}</em>
       </span>
     </label>
+  );
+}
+
+interface CityEditorProps {
+  cities: Location[];
+  active: number;
+  onAdd: (location: Location) => void;
+  onRemove: (index: number) => void;
+}
+
+const CITY_SEARCH_DEBOUNCE_MS = 300;
+
+/** Search cities and keep the saved list in one place, so the weather tab only
+    has to offer left/right switching. */
+function CityEditor({ cities, active, onAdd, onRemove }: CityEditorProps) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Location[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      SearchCities(term)
+        .then((list) => {
+          if (!cancelled) setResults(list ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, CITY_SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  const add = (location: Location) => {
+    onAdd(location);
+    setQuery("");
+    setResults([]);
+  };
+
+  return (
+    <div className="settings-cities">
+      <div className="settings-city-search">
+        <input
+          type="text"
+          value={query}
+          placeholder="搜索城市并添加"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </div>
+
+      {query.trim() !== "" && (
+        <div className="settings-city-results">
+          {searching ? (
+            <span className="settings-city-empty">搜索中…</span>
+          ) : results.length === 0 ? (
+            <span className="settings-city-empty">没有找到匹配的城市</span>
+          ) : (
+            results.map((location) => {
+              const saved = cities.some(
+                (city) =>
+                  Math.abs(city.lat - location.lat) < 1e-4 &&
+                  Math.abs(city.lon - location.lon) < 1e-4,
+              );
+              return (
+                <button
+                  key={`${location.name}-${location.lat}-${location.lon}`}
+                  type="button"
+                  className="settings-city-result"
+                  onClick={() => add(location)}
+                >
+                  <b>{location.name}</b>
+                  <span>{[location.region, location.country].filter(Boolean).join(" · ")}</span>
+                  <em>{saved ? "已添加" : "+"}</em>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {cities.length === 0 ? (
+        <div className="settings-note">
+          还没有保存的城市；天气页会先按公网 IP 自动定位。
+        </div>
+      ) : (
+        <>
+          <div className="settings-city-list">
+            {cities.map((city, index) => {
+              const place = [city.name, city.region, city.country].filter(Boolean).join(" · ");
+              return (
+                <div
+                  className={index === active ? "settings-city-row is-active" : "settings-city-row"}
+                  key={`${city.name}-${city.lat}-${city.lon}`}
+                >
+                  <span className="settings-city-dot" aria-hidden="true" />
+                  <span className="settings-city-name" title={place}>
+                    {city.name}
+                    <em>{[city.region, city.country].filter(Boolean).join(" · ")}</em>
+                  </span>
+                  {index === active && <span className="settings-city-current">当前</span>}
+                  {cities.length > 1 && (
+                    <button
+                      type="button"
+                      aria-label={`移除 ${city.name}`}
+                      title={`移除 ${city.name}`}
+                      onClick={() => onRemove(index)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {cities.length === 1 && (
+            <div className="settings-note">
+              至少保留一个城市；再添加一个后即可移除。
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

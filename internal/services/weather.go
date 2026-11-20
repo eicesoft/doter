@@ -6,7 +6,7 @@ import (
 	"doter/internal/weather"
 )
 
-// WeatherService exposes the weather forecast to the frontend.
+// WeatherService exposes the weather forecast and city list to the frontend.
 type WeatherService struct {
 	client *weather.Client
 }
@@ -16,18 +16,15 @@ func NewWeatherService(client *weather.Client) *WeatherService {
 	return &WeatherService{client: client}
 }
 
-// GetForecast returns the current weather and a short daily forecast,
-// locating the user by IP the first time it is called. It returns null when
-// the network is unavailable; the panel shows that as "no data".
-func (s *WeatherService) GetForecast() *weather.Forecast {
-	f, err := s.client.Forecast(context.Background())
-	if err != nil {
-		return nil
-	}
-	return &f
+// GetState returns the saved cities, the active index and the active city's
+// forecast. The forecast is null when the network is unavailable; the panel
+// shows that as "no data" while keeping the city list usable.
+func (s *WeatherService) GetState() *weather.State {
+	st, _ := s.client.State(context.Background())
+	return &st
 }
 
-// SearchCities looks up cities by name so the location can be pinned.
+// SearchCities looks up cities by name so they can be added in settings.
 func (s *WeatherService) SearchCities(query string) *[]weather.Location {
 	locations, err := s.client.Search(context.Background(), query)
 	if err != nil {
@@ -36,8 +33,31 @@ func (s *WeatherService) SearchCities(query string) *[]weather.Location {
 	return &locations
 }
 
-// SetLocation pins the forecast to a city and returns its current weather.
-func (s *WeatherService) SetLocation(loc weather.Location) *weather.Forecast {
-	s.client.SetLocation(loc)
-	return s.GetForecast()
+// AddCity adds a city to the saved list and selects it.
+func (s *WeatherService) AddCity(loc weather.Location) *weather.State {
+	st := s.client.AddCity(loc)
+	return &st
+}
+
+// RemoveCity drops a saved city by index.
+func (s *WeatherService) RemoveCity(index int) *weather.State {
+	st := s.client.RemoveCity(index)
+	return &st
+}
+
+// StepCity moves the active city by delta, wrapping around the list.
+func (s *WeatherService) StepCity(delta int) *weather.State {
+	st := s.client.StepCity(delta)
+	return &st
+}
+
+// GetCityForecast returns the forecast for the city offset steps from the
+// active one without selecting it. The panel preloads its neighbouring pages
+// with this so a swipe never waits on the network halfway through.
+func (s *WeatherService) GetCityForecast(offset int) *weather.Forecast {
+	f, err := s.client.Peek(context.Background(), offset)
+	if err != nil {
+		return nil
+	}
+	return &f
 }

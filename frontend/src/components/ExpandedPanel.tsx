@@ -291,6 +291,10 @@ export function ExpandedPanel({
           settings={settings}
           onChange={onChangeSettings}
           backendSettings={backendSettings}
+          weatherCities={weather.cities}
+          weatherActive={weather.active}
+          onAddWeatherCity={weather.addCity}
+          onRemoveWeatherCity={weather.removeCity}
           onSetAlertsEnabled={onSetAlertsEnabled}
           onSetClipboardPaused={onSetClipboardPaused}
           onSetClipboardHotkeyEnabled={onSetClipboardHotkeyEnabled}

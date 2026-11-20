@@ -62,7 +62,10 @@ body {
   overflow: hidden;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  /* Every page bans text selection; text fields opt back in individually with
+     both properties, since older WebKit builds ignore the unprefixed name. */
   user-select: none;
+  -webkit-user-select: none;
   cursor: default;
 }
 
@@ -876,6 +879,179 @@ body {
   outline: none;
 }
 
+/* --- Weather cities in settings ------------------------------------------ */
+
+.settings-cities {
+  padding: 2px 6px 4px;
+}
+
+.settings-city-search input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10.5px;
+  padding: 4px 7px;
+  outline: none;
+}
+
+.settings-city-search input:focus {
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+.settings-city-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 138px;
+  margin-top: 5px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.settings-city-result {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.settings-city-result:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-city-result b {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.settings-city-result span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.settings-city-result em {
+  flex: none;
+  font-style: normal;
+  font-size: 9px;
+  color: var(--accent);
+}
+
+.settings-city-empty {
+  display: block;
+  padding: 4px 6px;
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.settings-city-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 168px;
+  margin-top: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.settings-city-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  font-size: 10.5px;
+  transition: background 140ms ease;
+}
+
+.settings-city-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-city-row.is-active {
+  background: rgba(167, 139, 250, 0.09);
+}
+
+.settings-city-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dim);
+  opacity: 0.4;
+}
+
+.settings-city-row.is-active .settings-city-dot {
+  background: var(--accent-net);
+  opacity: 1;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent-net) 70%, transparent);
+}
+
+.settings-city-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.settings-city-name em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: normal;
+  font-size: 8.5px;
+  color: var(--dim);
+}
+
+.settings-city-current {
+  flex: none;
+  font-size: 8.5px;
+  color: var(--accent-net);
+}
+
+.settings-city-row button {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-city-row button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .settings-panel-foot {
   flex: none;
   display: flex;
@@ -1392,82 +1568,187 @@ body {
 }
 
 .weather-panel {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Horizontal drags page the cities; vertical gestures stay with the OS. */
+  touch-action: pan-y;
 }
 
-/* Scope beats the plain .clipboard-search rule further down, whose flex: 1
-   would otherwise stretch the search box in this column layout. */
-.weather-panel .weather-search {
-  flex: none;
-  height: 24px;
+.weather-panel .wx-body {
+  cursor: grab;
 }
 
-.weather-panel .weather-search:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  background: rgba(255, 255, 255, 0.055);
+.weather-panel[data-swiping="true"] .wx-body {
+  cursor: grabbing;
 }
 
 .weather-panel .empty-state {
   margin-top: 12px;
 }
 
-.weather-results {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
-}
-
-.weather-result {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.weather-result:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.07);
-}
-
-.weather-result b {
-  font-size: 11.5px;
-  font-weight: 600;
-}
-
-.weather-result span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 10px;
-  color: var(--muted);
-}
-
-/* Everything under the search box fits the card exactly: no scroll container.
+/* Everything under the hero fits the card exactly: no scroll container.
    The footer is pinned to the card's bottom edge so the space below it matches
    the card's top padding above the WEATHER label. */
 .wx-body {
+  position: relative;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+/* A three-page strip: previous | current | next. The middle page fills the
+   card and the neighbours wait just outside; dragging moves the whole strip,
+   so the pages meet edge to edge and the card never shows empty space. */
+.wx-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 300%;
+  height: 100%;
+  /* The resting base: the middle page fills the card. Gestures write an
+     explicit pixel transform (and animate it) from JS instead of transitioning
+     a custom property, so the strip stays glued to the pointer. */
+  transform: translate3d(-33.3333%, 0, 0);
+  will-change: transform;
+}
+
+.wx-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 6px;
   overflow: hidden;
+}
+
+/* Neighbour pages are prefetch cards; they must not steal strip gestures. */
+.wx-pane.is-side {
+  pointer-events: none;
+}
+
+.wx-body[data-solo="true"] .wx-track {
+  width: 100%;
+  transform: none;
+}
+
+/* A neighbour page that is still loading its forecast. */
+.wx-pending {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--muted);
+}
+
+.wx-pending b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.wx-pending span {
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.wx-pending em {
+  margin-top: 3px;
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+/* Each city remounts its sections, so the readings rise in when a page first
+   materialises; the swipe direction sets the horizontal lag. */
+.wx-pane > .wx-hero,
+.wx-pane > .wx-metrics,
+.wx-pane > .wx-days,
+.wx-pane > .wx-foot {
+  animation: wx-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.wx-pane > .wx-hero {
+  animation-delay: 30ms;
+}
+
+.wx-pane > .wx-metrics {
+  animation-delay: 70ms;
+}
+
+.wx-pane > .wx-days {
+  animation-delay: 120ms;
+}
+
+.wx-pane > .wx-foot {
+  animation-delay: 160ms;
+}
+
+@keyframes wx-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 9px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A light sweep across the card as the new city lands. */
+.wx-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.wx-sheen::before {
+  content: "";
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  left: -60%;
+  width: 70%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 24%, transparent) 35%,
+    rgba(255, 255, 255, 0.26) 50%,
+    color-mix(in srgb, var(--accent) 18%, transparent) 65%,
+    transparent
+  );
+  animation: wx-sheen 620ms cubic-bezier(0.3, 0.6, 0.2, 1) 60ms both;
+  will-change: transform, opacity;
+}
+
+/* Going back, the highlight travels the other way. The keyframes fade in and
+   out symmetrically, so reversing them still looks right. */
+.wx-sheen.is-prev::before {
+  animation-direction: reverse;
+}
+
+@keyframes wx-sheen {
+  from {
+    transform: translateX(0) skewX(-14deg);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(260%) skewX(-14deg);
+    opacity: 0;
+  }
 }
 
 /* --- Current conditions -------------------------------------------------- */
@@ -1500,8 +1781,44 @@ body {
   color: var(--accent);
 }
 
+/* The halo breathes outward and the glyph pops as the new city lands. */
+.wx-medallion::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 50%;
+  animation: wx-halo 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes wx-halo {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
 .wx-medallion svg {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 55%, transparent));
+  animation: wx-icon-pop 640ms cubic-bezier(0.34, 1.56, 0.64, 1) 120ms both;
+}
+
+@keyframes wx-icon-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-9deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .wx-hero-main {
@@ -1539,6 +1856,79 @@ body {
   width: 11px;
   height: 11px;
   flex: none;
+}
+
+/* City switching sits in the location line so the hero stays one block. */
+.wx-city-step {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 120ms ease;
+}
+
+.wx-city-step:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.wx-city-step:active {
+  transform: scale(0.92);
+}
+
+/* Page dots: the active city stretches into an accent-tinted pill. */
+.wx-city-dots {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 1px;
+}
+
+.wx-city-dot {
+  width: 4px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.24);
+  cursor: pointer;
+  transition:
+    width 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 180ms ease,
+    box-shadow 240ms ease,
+    transform 160ms ease;
+}
+
+.wx-city-dot:hover {
+  background: rgba(255, 255, 255, 0.55);
+  transform: scale(1.35);
+}
+
+.wx-city-dot.is-active {
+  width: 12px;
+  background: var(--accent);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+.wx-city-dot:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
 }
 
 .wx-dot {
@@ -3193,6 +3583,7 @@ body {
   font-size: 9.5px;
   outline: none;
   user-select: text;
+  -webkit-user-select: text;
 }
 
 .cal-input:focus {

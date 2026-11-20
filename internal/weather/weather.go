@@ -82,62 +82,190 @@ type Forecast struct {
 	UpdatedAt int64    `json:"updatedAt"`
 }
 
-// Client fetches forecasts and remembers the chosen location between runs.
-type Client struct {
-	http *http.Client
-	// path is where the chosen location is persisted.
-	path string
-
-	mu       sync.Mutex
-	location *Location
-	forecast *Forecast
+// State is the saved city list plus the forecast for the active city. The
+// forecast is nil when the network request failed; the city list and active
+// index still let the UI offer retry and city switching.
+type State struct {
+	Cities   []Location `json:"cities"`
+	Active   int        `json:"active"`
+	Forecast *Forecast  `json:"forecast,omitempty"`
 }
 
-// NewClient creates a client that persists its location at path.
+type cachedForecast struct {
+	forecast Forecast
+	at       time.Time
+}
+
+// Client fetches forecasts and remembers the chosen cities between runs.
+type Client struct {
+	http *http.Client
+	// path is where the city list and active index are persisted.
+	path string
+
+	mu        sync.Mutex
+	cities    []Location
+	active    int
+	forecasts map[string]cachedForecast
+}
+
+// NewClient creates a client that persists its cities at path.
 func NewClient(path string) *Client {
 	c := &Client{
-		http: &http.Client{Timeout: requestTimeout},
-		path: path,
+		http:      &http.Client{Timeout: requestTimeout},
+		path:      path,
+		forecasts: make(map[string]cachedForecast),
 	}
 	c.load()
 	return c
 }
 
-// Forecast returns the current weather, fetching it when the cache expired.
-// The location is guessed from the IP address on first use.
-func (c *Client) Forecast(ctx context.Context) (Forecast, error) {
+// State returns the city list and the forecast for the active city. The
+// location is guessed from the IP address on first use. The forecast pointer
+// is nil when fetching failed, while the cities stay available.
+func (c *Client) State(ctx context.Context) (State, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.forecast != nil && time.Since(time.UnixMilli(c.forecast.UpdatedAt)) < CacheTTL {
-		return *c.forecast, nil
-	}
-
-	if c.location == nil {
+	if len(c.cities) == 0 {
 		loc, err := c.locate(ctx)
 		if err != nil {
-			return Forecast{}, err
+			return State{}, err
 		}
-		c.location = loc
+		c.cities = []Location{*loc}
+		c.active = 0
 		c.saveLocked()
 	}
 
-	f, err := c.fetch(ctx, *c.location)
-	if err != nil {
-		return Forecast{}, err
+	if err := c.fetchActiveLocked(ctx); err != nil {
+		return c.stateLocked(), err
 	}
-	c.forecast = &f
-	return f, nil
+	st := c.stateLocked()
+	f := c.forecasts[cityKey(c.cities[c.active])].forecast
+	st.Forecast = &f
+	return st, nil
 }
 
-// SetLocation pins the location by hand and drops the cached forecast.
-func (c *Client) SetLocation(loc Location) {
+// AddCity adds a city and makes it the active one. An already-known city is
+// only selected, so adding a search hit twice is harmless.
+func (c *Client) AddCity(loc Location) State {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.location = &loc
-	c.forecast = nil
+	if loc.Name == "" {
+		return c.stateLocked()
+	}
+	if index := c.cityIndexLocked(loc); index >= 0 {
+		c.active = index
+		c.saveLocked()
+		return c.stateLocked()
+	}
+	c.cities = append(c.cities, loc)
+	c.active = len(c.cities) - 1
 	c.saveLocked()
+	return c.stateLocked()
+}
+
+// RemoveCity drops a city by index. Removing the active city selects its
+// successor, or the new last city when the removed one was at the end.
+func (c *Client) RemoveCity(index int) State {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if index < 0 || index >= len(c.cities) {
+		return c.stateLocked()
+	}
+	c.cities = append(c.cities[:index], c.cities[index+1:]...)
+	switch {
+	case len(c.cities) == 0:
+		c.active = 0
+	case c.active > index:
+		c.active--
+	case c.active >= len(c.cities):
+		c.active = len(c.cities) - 1
+	}
+	c.saveLocked()
+	return c.stateLocked()
+}
+
+// StepCity moves the active index by delta, wrapping around the city list.
+func (c *Client) StepCity(delta int) State {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.cities) < 2 {
+		return c.stateLocked()
+	}
+	n := len(c.cities)
+	c.active = ((c.active+delta)%n + n) % n
+	c.saveLocked()
+	return c.stateLocked()
+}
+
+// Peek returns the forecast for the city delta steps from the active one
+// without changing the selection. The UI uses it to preload the neighbouring
+// pages so a swipe can slide between ready cities instead of waiting on the
+// network mid-gesture.
+func (c *Client) Peek(ctx context.Context, delta int) (Forecast, error) {
+	c.mu.Lock()
+	if len(c.cities) == 0 {
+		c.mu.Unlock()
+		return Forecast{}, fmt.Errorf("no cities saved")
+	}
+	n := len(c.cities)
+	loc := c.cities[((c.active+delta)%n+n)%n]
+	key := cityKey(loc)
+	if cached, ok := c.forecasts[key]; ok && time.Since(cached.at) < CacheTTL {
+		c.mu.Unlock()
+		return cached.forecast, nil
+	}
+	c.mu.Unlock()
+
+	// Fetch outside the lock: a prefetch for a neighbour must never hold up a
+	// StepCity or a refresh of the active city.
+	f, err := c.fetch(ctx, loc)
+	if err != nil {
+		return Forecast{}, err
+	}
+	c.mu.Lock()
+	c.forecasts[key] = cachedForecast{forecast: f, at: time.Now()}
+	c.mu.Unlock()
+	return f, nil
+}
+
+func (c *Client) stateLocked() State {
+	cities := make([]Location, len(c.cities))
+	copy(cities, c.cities)
+	return State{Cities: cities, Active: c.active}
+}
+
+func (c *Client) cityIndexLocked(loc Location) int {
+	key := cityKey(loc)
+	for i, city := range c.cities {
+		if cityKey(city) == key {
+			return i
+		}
+	}
+	return -1
+}
+
+func cityKey(loc Location) string {
+	return fmt.Sprintf("%.4f,%.4f", loc.Lat, loc.Lon)
+}
+
+// fetchActiveLocked refreshes the active city's forecast when its cache
+// expired. Callers must hold the mutex.
+func (c *Client) fetchActiveLocked(ctx context.Context) error {
+	loc := c.cities[c.active]
+	key := cityKey(loc)
+	if cached, ok := c.forecasts[key]; ok && time.Since(cached.at) < CacheTTL {
+		return nil
+	}
+	f, err := c.fetch(ctx, loc)
+	if err != nil {
+		return err
+	}
+	c.forecasts[key] = cachedForecast{forecast: f, at: time.Now()}
+	return nil
 }
 
 // Search looks up cities by name.
@@ -370,18 +498,35 @@ func (c *Client) load() {
 	if err != nil {
 		return
 	}
+
+	// Current format: a city list with the active index.
+	var stored struct {
+		Cities []Location `json:"cities"`
+		Active int        `json:"active"`
+	}
+	if err := json.Unmarshal(data, &stored); err == nil && len(stored.Cities) > 0 {
+		c.cities = stored.Cities
+		if stored.Active >= 0 && stored.Active < len(c.cities) {
+			c.active = stored.Active
+		}
+		return
+	}
+
+	// Older builds persisted a single Location object; adopt it as the only
+	// city so the first run after the upgrade keeps the chosen place.
 	var loc Location
 	if err := json.Unmarshal(data, &loc); err != nil || loc.Name == "" {
 		return
 	}
-	c.location = &loc
+	c.cities = []Location{loc}
+	c.active = 0
 }
 
 func (c *Client) saveLocked() {
-	if c.location == nil {
-		return
-	}
-	data, err := json.Marshal(c.location)
+	data, err := json.Marshal(struct {
+		Cities []Location `json:"cities"`
+		Active int        `json:"active"`
+	}{Cities: c.cities, Active: c.active})
 	if err != nil {
 		return
 	}
