@@ -42,12 +42,12 @@ export const TAB_OPTIONS: readonly {
   accent: string;
   locked?: boolean;
 }[] = [
-  { key: "overview", label: "系统总览", accent: "var(--accent-cpu)" },
+  { key: "overview", label: "系统总览", accent: "var(--accent-cpu)", locked: true },
   { key: "calendar", label: "日历", accent: "var(--accent-sys)" },
   { key: "clipboard", label: "剪切板", accent: "var(--accent-disk)" },
   { key: "weather", label: "天气", accent: "var(--accent-net)" },
   { key: "music", label: "音乐", accent: "var(--accent-net)" },
-  { key: "agents", label: "Agent 监控", accent: "var(--accent-cpu)", locked: true },
+  { key: "agents", label: "Agent 监控", accent: "var(--accent-cpu)" },
 ];
 
 const TAB_KEYS: readonly TabKey[] = TAB_OPTIONS.map((option) => option.key);
@@ -155,9 +155,9 @@ export function loadSettings(): Settings {
       tabs: TAB_KEYS.reduce(
         (tabs, key) => {
           const value = saved.tabs?.[key];
-          // The agents tab is the monitoring surface and stays available even
+          // The overview tab is the dashboard's home and stays available even
           // if an old or hand-edited file turned it off.
-          tabs[key] = key === "agents" ? true : typeof value === "boolean" ? value : fallback.tabs[key];
+          tabs[key] = key === "overview" ? true : typeof value === "boolean" ? value : fallback.tabs[key];
           return tabs;
         },
         { ...fallback.tabs },

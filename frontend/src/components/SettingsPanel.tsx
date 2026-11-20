@@ -72,7 +72,7 @@ export function SettingsPanel({
     onChange({ ...settings, collapsed });
   };
   const setTabVisible = (key: TabKey, value: boolean) => {
-    if (key === "agents") return;
+    if (key === "overview") return;
     onChange({ ...settings, tabs: { ...settings.tabs, [key]: value } });
   };
 
@@ -169,7 +169,7 @@ export function SettingsPanel({
                   />
                 ))}
                 <div className="settings-note">
-                  「Agent 监控」始终显示，不能关闭。
+                  「系统总览」始终显示，不能关闭。
                 </div>
               </Group>
             </div>

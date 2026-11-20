@@ -43,9 +43,10 @@ function App() {
   }, [settings]);
 
   // Keep the dashboard on a page that is still enabled; disabling the current
-  // tab lands on the first visible one (Agent monitoring always stays on).
+  // tab lands on the first visible one (system overview is always first and
+  // cannot be hidden).
   const fallbackTab: TabKey =
-    TAB_OPTIONS.find((option) => settings.tabs[option.key])?.key ?? "agents";
+    TAB_OPTIONS.find((option) => settings.tabs[option.key])?.key ?? "overview";
   useEffect(() => {
     if (!settings.tabs[activeTab]) setActiveTab(fallbackTab);
   }, [activeTab, fallbackTab, settings.tabs]);
