@@ -19,6 +19,10 @@ import (
 // topProcesses bounds how many rows each ranking contributes to a snapshot.
 const topProcesses = 20
 
+// maxDisks bounds how many volumes a snapshot carries. The panel lists every
+// volume it receives, so this only guards against pathological mount tables.
+const maxDisks = 8
+
 // Sampler periodically reads system metrics on a single background goroutine.
 // Consumers read the latest snapshot through Current or receive copies on the
 // Updates channel.
@@ -312,8 +316,8 @@ func collectDisks() []DiskStats {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Mountpoint < result[j].Mountpoint
 	})
-	if len(result) > 4 {
-		result = result[:4]
+	if len(result) > maxDisks {
+		result = result[:maxDisks]
 	}
 	return result
 }

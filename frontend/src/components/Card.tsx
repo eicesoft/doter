@@ -11,11 +11,23 @@ interface CardProps {
   wide?: boolean;
   /** Settings can switch a card off without unmounting its siblings. */
   hidden?: boolean;
+  /** Extra class for the body, e.g. to opt into scrolling for long lists. */
+  bodyClassName?: string;
   children: ReactNode;
 }
 
 /** A dashboard tile: title row, optional header controls, then the body. */
-export function Card({ label, hint, actions, inline, accent, wide, hidden, children }: CardProps) {
+export function Card({
+  label,
+  hint,
+  actions,
+  inline,
+  accent,
+  wide,
+  hidden,
+  bodyClassName,
+  children,
+}: CardProps) {
   if (hidden) return null;
   return (
     <section
@@ -31,7 +43,9 @@ export function Card({ label, hint, actions, inline, accent, wide, hidden, child
           hint && <span className="card-hint">{hint}</span>
         )}
       </div>
-      <div className="card-body">{children}</div>
+      <div className={bodyClassName ? `card-body ${bodyClassName}` : "card-body"}>
+        {children}
+      </div>
     </section>
   );
 }

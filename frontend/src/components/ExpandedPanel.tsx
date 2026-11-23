@@ -11,6 +11,7 @@ import {
 import { CARD_KEYS, type Settings, type TabKey } from "../lib/settings";
 import type { WeatherController } from "../hooks/useWeather";
 import {
+  clampPercent,
   formatBytes,
   formatBytesCompact,
   formatClock,
@@ -67,6 +68,26 @@ function KV({ label, value }: { label: string; value: ReactNode }) {
     <div className="kv">
       <span>{label}</span>
       <b>{value}</b>
+    </div>
+  );
+}
+
+/** One bar per logical CPU; each bar's height follows that core's utilisation. */
+function CoreStrip({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const label = values
+    .map((value, index) => `核心 ${index + 1} ${formatPercent(value)}`)
+    .join("，");
+  return (
+    <div className="core-strip" role="img" aria-label={label}>
+      {values.map((value, index) => (
+        <span
+          key={index}
+          className="core-bar"
+          style={{ height: `${clampPercent(value)}%` }}
+          title={`核心 ${index + 1}: ${formatPercent(value)}`}
+        />
+      ))}
     </div>
   );
 }
@@ -190,8 +211,13 @@ export function ExpandedPanel({
   const threads = staticInfo?.cpuThreads || perCore.length || 0;
   const cores = staticInfo?.cpuCores || 0;
   const primaryDisk = disks[0];
-  const secondaryDisk = disks[1];
-  const netInterface = network?.interfaces?.[0]?.name;
+  const netInterfaces = network?.interfaces ?? [];
+  // The speeds are the sum across every physical NIC, so a single interface
+  // name would mislabel them; show the count once there is more than one.
+  const netLabel =
+    netInterfaces.length > 1
+      ? `${netInterfaces.length} interfaces`
+      : (netInterfaces[0]?.name ?? "offline");
   // The weather tab is tinted by the weather itself; without a forecast it
   // falls back to the network accent it used before.
   const wxAccent = weather.forecast
@@ -332,6 +358,7 @@ export function ExpandedPanel({
                 <div className="cpu-facts">
                   <KV label="Threads" value={threads || "—"} />
                   <KV label="Cores" value={cores || "—"} />
+                  <CoreStrip values={perCore} />
                 </div>
               </div>
               <Sparkline
@@ -371,20 +398,21 @@ export function ExpandedPanel({
               hint={disks.length > 1 ? `${disks.length} volumes` : primaryDisk?.fstype}
               accent="var(--accent-disk)"
               hidden={!settings.cards.storage}
+              bodyClassName="card-body-scroll"
             >
               {primaryDisk ? (
                 <div className="disk-list">
-                  {[primaryDisk, secondaryDisk].filter(Boolean).map((disk) => (
-                    <div className="disk-row" key={disk!.mountpoint}>
+                  {disks.map((disk) => (
+                    <div className="disk-row" key={disk.mountpoint}>
                       <div className="disk-meta">
-                        <span className="disk-name" title={disk!.mountpoint}>
-                          {disk!.mountpoint}
+                        <span className="disk-name" title={disk.mountpoint}>
+                          {disk.mountpoint}
                         </span>
-                        <span className="disk-pct">{formatPercent(disk!.usedPercent)}</span>
+                        <span className="disk-pct">{formatPercent(disk.usedPercent)}</span>
                       </div>
-                      <Meter value={disk!.usedPercent} color="var(--accent-disk)" />
+                      <Meter value={disk.usedPercent} color="var(--accent-disk)" />
                       <div className="disk-sub">
-                        {formatBytes(disk!.used)} of {formatBytes(disk!.total)}
+                        {formatBytes(disk.used)} of {formatBytes(disk.total)}
                       </div>
                     </div>
                   ))}
@@ -396,7 +424,7 @@ export function ExpandedPanel({
 
             <Card
               label="Network"
-              hint={netInterface ?? "offline"}
+              hint={netLabel}
               accent="var(--accent-net)"
               hidden={!settings.cards.network}
             >
@@ -547,7 +575,7 @@ export function ExpandedPanel({
                           procSort === "cpu" ? "proc-cpu is-ranked" : "proc-cpu"
                         }
                       >
-                        {searching ? "—" : formatPercent(process.cpuPercent, 1)}
+                        {formatPercent(process.cpuPercent, 1)}
                       </span>
                       <span
                         className={

@@ -4068,6 +4068,27 @@ body {
   gap: 3px;
 }
 
+/* Per-core utilisation: one thin bar per logical CPU, bottom-aligned so the
+   busiest cores read as the tallest. */
+.core-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  margin-top: 1px;
+  pointer-events: auto;
+}
+
+.core-bar {
+  flex: 1 1 0;
+  min-width: 1px;
+  max-width: 5px;
+  min-height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent-cpu) 62%, transparent);
+  transition: height 240ms ease;
+}
+
 .card-spark {
   display: block;
   width: 100%;
@@ -4108,10 +4129,38 @@ body {
   color: #cfd4de;
 }
 
+/* Long volume lists scroll inside the fixed-height card instead of clipping
+   the top row; align to the start so the first volume stays reachable. */
+.card-body-scroll {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+/* Auto margins centre the list while it fits and collapse to 0 once it
+   overflows, so a long volume list starts at the first row and scrolls. */
+.card-body-scroll > .disk-list {
+  margin-block: auto;
+}
+
 .disk-list {
   display: flex;
   flex-direction: column;
   gap: 7px;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.disk-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.disk-list::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .disk-row {
