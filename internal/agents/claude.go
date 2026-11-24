@@ -14,6 +14,7 @@ import (
 type claudeState struct {
 	offset   int64
 	waiting  bool
+	awaiting bool
 	session  Session
 	title    string
 	prompt   string
@@ -23,6 +24,7 @@ type claudeState struct {
 func (s *claudeState) reset() {
 	s.offset = 0
 	s.waiting = false
+	s.awaiting = false
 	s.session = Session{Agent: "claude"}
 	s.title = ""
 	s.prompt = ""
@@ -106,7 +108,7 @@ func (m *Monitor) scanClaude(now time.Time) []*sessionEntry {
 				state.session.StartedAt = info.ModTime().UnixMilli()
 			}
 			state.session.Title = claudeTitle(state)
-			entries = append(entries, &sessionEntry{session: state.session, waiting: state.waiting})
+			entries = append(entries, &sessionEntry{session: state.session, waiting: state.waiting, awaiting: state.awaiting})
 		}
 	}
 
@@ -169,15 +171,21 @@ func (st *claudeState) consume(line []byte) {
 		if st.fallback == "" {
 			st.fallback = cleanTitle(record.LastPrompt)
 		}
-		st.waiting = false
+		// It is written after the turn's end_turn as well as at the start of a
+		// new one, so it cannot decide whether the agent is working. The user
+		// record below is the reliable start-of-turn marker.
 	case "user":
 		st.waiting = false
+		st.awaiting = false
 		if st.prompt == "" {
 			st.prompt = firstClaudeText(record.Message.Content)
 		}
 	case "assistant":
 		if reason := record.Message.StopReason; reason != "" {
 			st.waiting = reason == "end_turn" || reason == "stop_sequence"
+			// A tool call without its result yet means the CLI is waiting on
+			// the user (permission prompt or a question).
+			st.awaiting = reason == "tool_use"
 		}
 		if model := record.Message.Model; model != "" && !strings.HasPrefix(model, "<") {
 			st.session.Model = model
@@ -192,6 +200,7 @@ func (st *claudeState) consume(line []byte) {
 		}
 	case "api-request", "queue-operation":
 		st.waiting = false
+		st.awaiting = false
 	}
 }
 

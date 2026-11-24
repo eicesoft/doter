@@ -179,16 +179,17 @@ func (e *Engine) ObserveAgents(snapshot agents.Snapshot) {
 			state.notified = true
 			if e.on() {
 				switch session.Status {
-				case agents.StatusIdle:
-					if now-state.runningSince >= agentMinRun.Milliseconds() {
-						out = append(out, e.agentAlert(session, KindAgentIdle, "等待输入",
-							fmt.Sprintf("%s · %s", sessionProject(session), sessionLabel(session)), now))
-					}
+				case agents.StatusWaiting:
+					// A blocked turn needs the user, so it always notifies.
+					out = append(out, e.agentAlert(session, KindAgentIdle, "等待输入",
+						fmt.Sprintf("%s · %s", sessionProject(session), sessionLabel(session)), now))
 				case agents.StatusDone:
-					out = append(out, e.agentAlert(session, KindAgentDone, "已完成",
-						fmt.Sprintf("%s · %s\n本次 ↑%s ↓%s tokens", sessionProject(session),
-							sessionLabel(session), formatTokens(session.InputTokens),
-							formatTokens(session.OutputTokens)), now))
+					if now-state.runningSince >= agentMinRun.Milliseconds() {
+						out = append(out, e.agentAlert(session, KindAgentDone, "已完成",
+							fmt.Sprintf("%s · %s\n本次 ↑%s ↓%s tokens", sessionProject(session),
+								sessionLabel(session), formatTokens(session.InputTokens),
+								formatTokens(session.OutputTokens)), now))
+					}
 				}
 			}
 		}

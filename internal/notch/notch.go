@@ -30,6 +30,10 @@ const (
 	// the idle pill's content. Keep it tight: every extra point covers the
 	// menu bar on a notched display.
 	notchSideWidth = 48
+
+	// ToastHeight is the extra window room below the pill for an agent
+	// notification bubble.
+	ToastHeight = 96
 )
 
 // Options configures the island window.
@@ -62,6 +66,7 @@ type Controller struct {
 	mu       sync.Mutex
 	expanded bool
 	visible  bool
+	toast    bool
 }
 
 // New creates the island window. The window starts hidden; call PlaceAndShow
@@ -167,10 +172,36 @@ func (c *Controller) PlaceAndShow() {
 	c.mu.Unlock()
 
 	c.applyFrameOn(c.defaultScreen())
-	watchHover(c.win.NativeWindow(), func(entered bool) {
+	watchHover(c.win.NativeWindow(), c.toastInset, func(entered bool) {
 		c.app.Event.Emit(EventHover, entered)
 	})
 	c.win.Show()
+}
+
+// SetToastVisible reserves room below the pill for an agent notification
+// bubble (or releases it). Only the idle window grows; the dashboard covers
+// that space itself.
+func (c *Controller) SetToastVisible(visible bool) {
+	c.mu.Lock()
+	if c.toast == visible {
+		c.mu.Unlock()
+		return
+	}
+	c.toast = visible
+	c.mu.Unlock()
+
+	c.applyFrame()
+}
+
+// toastInset is the bottom strip of the window that belongs to the toast, so
+// the pointer poll does not treat hovering the bubble as hovering the pill.
+func (c *Controller) toastInset() float64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.toast && !c.expanded {
+		return ToastHeight
+	}
+	return 0
 }
 
 // SetExpanded resizes and repositions the native window. The frontend drives
@@ -291,6 +322,12 @@ func (c *Controller) applyFrameOn(screen *application.Screen) {
 func (c *Controller) sizeFor(expanded bool) (int, int) {
 	if expanded {
 		return c.opts.ExpandedWidth, c.opts.ExpandedHeight
+	}
+	c.mu.Lock()
+	toast := c.toast
+	c.mu.Unlock()
+	if toast {
+		return c.opts.CollapsedWidth, c.opts.CollapsedHeight + ToastHeight
 	}
 	return c.opts.CollapsedWidth, c.opts.CollapsedHeight
 }

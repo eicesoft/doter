@@ -28,8 +28,10 @@ import { Sparkline } from "./Sparkline";
 import { TabBar } from "./TabBar";
 import { CalendarPanel } from "./CalendarPanel";
 import { ClipboardPanel } from "./ClipboardPanel";
+import { TranslatePanel } from "./TranslatePanel";
 import { AgentsPanel } from "./AgentsPanel";
 import { MusicPanel } from "./MusicPanel";
+import { NoticePanel } from "./NoticePanel";
 import { WeatherPanel } from "./WeatherPanel";
 import { weatherAccent } from "./WeatherIcon";
 import { SettingsPanel } from "./SettingsPanel";
@@ -634,6 +636,8 @@ export function ExpandedPanel({
 
         {activeTab === "calendar" && <CalendarPanel />}
 
+        {activeTab === "notifications" && <NoticePanel />}
+
         {activeTab === "clipboard" && (
           <ClipboardPanel
             onFocusIsland={onFocusIsland}
@@ -650,6 +654,8 @@ export function ExpandedPanel({
           </Card>
         )}
 
+        {activeTab === "translate" && <TranslatePanel />}
+
         {activeTab === "music" && (
           <Card label="Music" accent="var(--accent-net)" wide>
             <MusicPanel />
@@ -658,7 +664,7 @@ export function ExpandedPanel({
 
         {activeTab === "agents" && (
           <Card label="Agents" hint="Claude · Codex" accent="var(--accent-cpu)" wide>
-            <AgentsPanel />
+            <AgentsPanel onFocusIsland={onFocusIsland} />
           </Card>
         )}
       </div>

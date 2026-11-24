@@ -55,6 +55,14 @@ export function SetGlassVisible(visible: boolean): $CancellablePromise<void> {
 }
 
 /**
+ * SetToastVisible reserves room below the idle pill for an agent notification
+ * bubble, and releases it once the bubble is gone.
+ */
+export function SetToastVisible(visible: boolean): $CancellablePromise<void> {
+    return $Call.ByID(451072637, visible);
+}
+
+/**
  * Show reveals the island.
  */
 export function Show(): $CancellablePromise<void> {

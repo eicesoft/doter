@@ -1,5 +1,6 @@
-// Package agents discovers Claude Code and Codex CLI sessions from their
-// on-disk logs and reports which ones are running.
+// Package agents discovers coding-agent sessions (Claude Code, Codex,
+// OpenCode, pi and omp) from their on-disk logs and reports which ones are
+// running.
 package agents
 
 // Status describes whether an agent session is still working.
@@ -7,16 +8,17 @@ const (
 	// StatusRunning means the agent is mid-turn: streaming, calling tools or
 	// waiting on a model response.
 	StatusRunning = "running"
-	// StatusIdle means the process is alive but waiting for the next prompt.
-	StatusIdle = "idle"
-	// StatusDone means no live process could be matched to the session.
+	// StatusWaiting means a live turn is blocked on a tool call the user has
+	// to approve or answer.
+	StatusWaiting = "waiting"
+	// StatusDone means the turn ended, whether or not its CLI still runs.
 	StatusDone = "done"
 )
 
-// Session is one Claude Code or Codex conversation.
+// Session is one agent conversation.
 type Session struct {
 	ID string `json:"id"`
-	// Agent is "claude" or "codex".
+	// Agent is "claude", "codex", "opencode", "pi" or "omp".
 	Agent       string `json:"agent"`
 	Project     string `json:"project"`
 	ProjectName string `json:"projectName"`
@@ -47,7 +49,7 @@ type Session struct {
 type Snapshot struct {
 	Sessions []Session `json:"sessions"`
 	Running  int       `json:"running"`
-	Idle     int       `json:"idle"`
+	Waiting  int       `json:"waiting"`
 	Done     int       `json:"done"`
 	// InputTokens and OutputTokens sum every session in the window.
 	InputTokens  int64 `json:"inputTokens"`

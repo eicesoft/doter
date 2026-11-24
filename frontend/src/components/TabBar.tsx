@@ -48,6 +48,16 @@ export function TabBar({ active, onSelect, onFocusIsland, enabled, weatherAccent
       ),
     },
     {
+      id: "notifications",
+      label: "通知",
+      icon: (
+        <svg viewBox="0 0 24 24" {...strokeProps}>
+          <path d="M6.2 16.5V11a5.8 5.8 0 0 1 11.6 0v5.5l1.7 2H4.5l1.7-2Z" />
+          <path d="M10 20.2a2.2 2.2 0 0 0 4 0" />
+        </svg>
+      ),
+    },
+    {
       id: "clipboard",
       label: "剪切板",
       icon: (
@@ -66,6 +76,18 @@ export function TabBar({ active, onSelect, onFocusIsland, enabled, weatherAccent
           <circle cx="8.5" cy="8.5" r="2.8" />
           <path d="M8.5 3v1.4M3 8.5h1.4M4.6 4.6 5.6 5.6M12.4 4.6 11.4 5.6" />
           <path d="M9 19.5h8a3.2 3.2 0 0 0 .3-6.4 4.8 4.8 0 0 0-9.1.6A3.4 3.4 0 0 0 9 19.5Z" />
+        </svg>
+      ),
+    },
+    {
+      id: "translate",
+      label: "翻译",
+      icon: (
+        <svg viewBox="0 0 24 24" {...strokeProps}>
+          <rect x="3.4" y="4.2" width="10.6" height="9.4" rx="2.6" />
+          <path d="M6.4 11.2 8.6 6.6l2.2 4.6M7.2 9.6h2.8" />
+          <path d="M16.8 8.6h4M19 6.4l2.2 2.2L19 10.8" />
+          <path d="M20.6 15.8h-4M18.4 13.6l-2.2 2.2 2.2 2.2" />
         </svg>
       ),
     },

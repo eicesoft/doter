@@ -28,6 +28,10 @@ func (s *IslandService) SetExpanded(expanded bool) bool {
 // so it does not linger over the shrinking island.
 func (s *IslandService) SetGlassVisible(visible bool) { s.ctrl.SetGlassVisible(visible) }
 
+// SetToastVisible reserves room below the idle pill for an agent notification
+// bubble, and releases it once the bubble is gone.
+func (s *IslandService) SetToastVisible(visible bool) { s.ctrl.SetToastVisible(visible) }
+
 // ToggleExpanded flips the window size and returns the new state.
 func (s *IslandService) ToggleExpanded() bool {
 	return s.ctrl.ToggleExpanded()

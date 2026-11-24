@@ -20,9 +20,11 @@ import (
 	"doter/internal/clipboard"
 	"doter/internal/fullscreen"
 	"doter/internal/notch"
+	"doter/internal/notice"
 	"doter/internal/prefs"
 	"doter/internal/services"
 	"doter/internal/sysinfo"
+	"doter/internal/translate"
 	"doter/internal/weather"
 )
 
@@ -60,6 +62,9 @@ func init() {
 	// Alerts are also forwarded to the frontend so the panel can stay in sync
 	// with the native notification.
 	application.RegisterEvent[alerts.Alert](services.EventAlert)
+	// System notifications from other apps feed the notification tab and the
+	// idle-pill bubble.
+	application.RegisterEvent[notice.Snapshot](services.EventNotices)
 	// A shortcut or notification click asks the frontend to open a tab.
 	application.RegisterEvent[string](services.EventOpenTab)
 }
@@ -179,9 +184,13 @@ func main() {
 	weatherClient := weather.NewClient(weatherLocationPath())
 	app.RegisterService(application.NewService(services.NewWeatherService(weatherClient)))
 	app.RegisterService(application.NewService(services.NewMusicService(app)))
+	app.RegisterService(application.NewService(services.NewTranslateService(translate.NewClient())))
 
 	agentMonitor := agents.NewMonitor()
 	app.RegisterService(application.NewService(services.NewAgentsService(agentMonitor)))
+
+	noticeMonitor := notice.NewMonitor()
+	app.RegisterService(application.NewService(services.NewNoticeService(noticeMonitor)))
 
 	// A notification click should bring the island back and open the tab that
 	// explains the alert.
@@ -228,6 +237,8 @@ func main() {
 		go pumpClipboard(app, clipboardWatcher)
 		agentMonitor.Start(context.Background())
 		go pumpAgents(app, agentMonitor, alertEngine)
+		noticeMonitor.Start(context.Background())
+		go pumpNotices(app, noticeMonitor)
 		go watchFullscreen(island, prefsStore)
 		if alertsEnabled() {
 			go requestNotificationPermission(notificationService)
@@ -301,6 +312,13 @@ func pumpAgents(app *application.App, monitor *agents.Monitor, engine *alerts.En
 	for snapshot := range monitor.Updates() {
 		app.Event.Emit(services.EventAgents, snapshot)
 		engine.ObserveAgents(snapshot)
+	}
+}
+
+// pumpNotices forwards the notification store snapshots to the frontend.
+func pumpNotices(app *application.App, monitor *notice.Monitor) {
+	for snapshot := range monitor.Updates() {
+		app.Event.Emit(services.EventNotices, snapshot)
 	}
 }
 

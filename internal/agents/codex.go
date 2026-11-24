@@ -12,15 +12,17 @@ import (
 
 // codexState is the incremental parse state of one Codex rollout log.
 type codexState struct {
-	offset  int64
-	waiting bool
-	session Session
-	prompt  string
+	offset   int64
+	waiting  bool
+	awaiting bool
+	session  Session
+	prompt   string
 }
 
 func (s *codexState) reset() {
 	s.offset = 0
 	s.waiting = false
+	s.awaiting = false
 	s.session = Session{Agent: "codex"}
 	s.prompt = ""
 }
@@ -105,7 +107,7 @@ func (m *Monitor) scanCodex(now time.Time) []*sessionEntry {
 		if state.session.Title == "" {
 			state.session.Title = state.session.ID
 		}
-		entries = append(entries, &sessionEntry{session: state.session, waiting: state.waiting})
+		entries = append(entries, &sessionEntry{session: state.session, waiting: state.waiting, awaiting: state.awaiting})
 		return nil
 	})
 
@@ -188,6 +190,22 @@ func (st *codexState) consume(line []byte) {
 			st.applyUsage(*usage.Thread, nil)
 		}
 
+	case "response_item":
+		// A tool call without its output yet means the CLI is waiting on the
+		// user (approval prompt), or is still executing the tool.
+		var item struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(record.Payload, &item) != nil {
+			return
+		}
+		switch item.Type {
+		case "function_call", "custom_tool_call":
+			st.awaiting = true
+		case "function_call_output", "custom_tool_call_output":
+			st.awaiting = false
+		}
+
 	case "event_msg":
 		var event codexEvent
 		if json.Unmarshal(record.Payload, &event) != nil {
@@ -205,8 +223,10 @@ func (st *codexState) consumeEvent(event codexEvent) {
 		}
 	case "task_started", "turn_started":
 		st.waiting = false
+		st.awaiting = false
 	case "task_complete", "turn_complete":
 		st.waiting = true
+		st.awaiting = false
 	case "token_count":
 		if event.Info != nil {
 			var last *codexUsage
@@ -225,12 +245,14 @@ func (st *codexState) consumeEvent(event codexEvent) {
 		switch item.Type {
 		case "UserMessage":
 			st.waiting = false
+			st.awaiting = false
 			if st.prompt == "" {
 				st.prompt = firstCodexText(item.Content)
 			}
 		case "AgentMessage":
 			if item.Phase == "final_answer" {
 				st.waiting = true
+				st.awaiting = false
 				st.session.Turns++
 			}
 		}

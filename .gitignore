@@ -11,3 +11,4 @@ build/darwin/*
 # Hand-edited build config: carries the macOS private_mac_apis tag needed for
 # webview transparency.
 !build/darwin/Taskfile.yml
+.mimosa/

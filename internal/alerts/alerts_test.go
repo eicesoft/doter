@@ -83,37 +83,37 @@ func TestAgentIdleAndDoneTransitions(t *testing.T) {
 	running.Status = agents.StatusRunning
 	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0, Sessions: []agents.Session{running}})
 
-	// A quick turn is not worth interrupting the user.
-	quick := base
-	quick.Status = agents.StatusIdle
-	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 30_000, Sessions: []agents.Session{quick}})
-	if len(got) != 0 {
-		t.Fatalf("quick turn should not notify, got %+v", got)
-	}
-
-	// A long turn that ends waiting for input does notify.
-	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 70_000, Sessions: []agents.Session{running}})
-	idle := base
-	idle.Status = agents.StatusIdle
-	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 200_000, Sessions: []agents.Session{idle}})
+	// A blocked turn always notifies: the user is what unblocks it.
+	blocked := base
+	blocked.Status = agents.StatusWaiting
+	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 30_000, Sessions: []agents.Session{blocked}})
 	if len(got) != 1 || got[0].Kind != KindAgentIdle {
-		t.Fatalf("expected idle alert for a long turn, got %+v", got)
+		t.Fatalf("expected idle alert for a blocked turn, got %+v", got)
 	}
 
-	// Repeating the same idle snapshot must not notify again.
-	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 260_000, Sessions: []agents.Session{idle}})
+	// Repeating the same blocked snapshot must not notify again.
+	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 60_000, Sessions: []agents.Session{blocked}})
 	if len(got) != 1 {
 		t.Fatalf("duplicate idle alert: %+v", got)
 	}
 
-	// A new run that ends without a waiting turn produces a done alert.
-	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 270_000, Sessions: []agents.Session{running}})
-	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 280_000, Sessions: []agents.Session{running}})
+	// A quick finished turn is not worth interrupting the user.
+	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 70_000, Sessions: []agents.Session{running}})
+	quick := base
+	quick.Status = agents.StatusDone
+	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 80_000, Sessions: []agents.Session{quick}})
+	if len(got) != 1 {
+		t.Fatalf("quick turn should not notify, got %+v", got)
+	}
+
+	// A long finished turn does notify.
+	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 90_000, Sessions: []agents.Session{running}})
+	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 200_000, Sessions: []agents.Session{running}})
 	done := base
 	done.Status = agents.StatusDone
-	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 290_000, Sessions: []agents.Session{done}})
+	engine.ObserveAgents(agents.Snapshot{UpdatedAt: t0 + 210_000, Sessions: []agents.Session{done}})
 	if len(got) != 2 || got[1].Kind != KindAgentDone {
-		t.Fatalf("expected done alert, got %+v", got)
+		t.Fatalf("expected done alert for a long turn, got %+v", got)
 	}
 }
 

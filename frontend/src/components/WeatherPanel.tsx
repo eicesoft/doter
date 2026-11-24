@@ -82,7 +82,6 @@ interface WeatherContentProps {
   active: number;
   loading: boolean;
   onFocusIsland: () => void;
-  onStep: (delta: number) => void;
   onJump: (index: number) => void;
 }
 
@@ -93,7 +92,6 @@ function WeatherContent({
   active,
   loading,
   onFocusIsland,
-  onStep,
   onJump,
 }: WeatherContentProps) {
   const days = forecast.days ?? [];
@@ -115,53 +113,27 @@ function WeatherContent({
             <span>{forecast.current.description}</span>
           </div>
           <div className="wx-hero-sub">
-            {cities.length > 1 && (
-              <button
-                type="button"
-                className="wx-city-step"
-                onPointerEnter={onFocusIsland}
-                onPointerDown={onFocusIsland}
-                onClick={() => onStep(-1)}
-                title="上一个城市"
-                aria-label="上一个城市"
-              >
-                ‹
-              </button>
-            )}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 21s6.5-6 6.5-10.5a6.5 6.5 0 1 0-13 0C5.5 15 12 21 12 21Z" />
               <circle cx="12" cy="10.5" r="2.2" />
             </svg>
             {[forecast.location.name, forecast.location.region].filter(Boolean).join(" · ")}
             {cities.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  className="wx-city-step"
-                  onPointerEnter={onFocusIsland}
-                  onPointerDown={onFocusIsland}
-                  onClick={() => onStep(1)}
-                  title="下一个城市"
-                  aria-label="下一个城市"
-                >
-                  ›
-                </button>
-                <div className="wx-city-dots">
-                  {cities.map((city, index) => (
-                    <button
-                      key={`${city.lat},${city.lon}`}
-                      type="button"
-                      className={index === active ? "wx-city-dot is-active" : "wx-city-dot"}
-                      onPointerEnter={onFocusIsland}
-                      onPointerDown={onFocusIsland}
-                      onClick={() => onJump(index)}
-                      title={city.name}
-                      aria-label={`切换到 ${city.name}`}
-                      aria-current={index === active ? "true" : undefined}
-                    />
-                  ))}
-                </div>
-              </>
+              <div className="wx-city-dots">
+                {cities.map((city, index) => (
+                  <button
+                    key={`${city.lat},${city.lon}`}
+                    type="button"
+                    className={index === active ? "wx-city-dot is-active" : "wx-city-dot"}
+                    onPointerEnter={onFocusIsland}
+                    onPointerDown={onFocusIsland}
+                    onClick={() => onJump(index)}
+                    title={city.name}
+                    aria-label={`切换到 ${city.name}`}
+                    aria-current={index === active ? "true" : undefined}
+                  />
+                ))}
+              </div>
             )}
             <span className="wx-dot" />
             {forecast.current.isDay ? "白天" : "夜间"}
@@ -275,12 +247,11 @@ interface WeatherPaneProps {
   loading: boolean;
   side?: boolean;
   onFocusIsland: () => void;
-  onStep: (delta: number) => void;
   onJump: (index: number) => void;
 }
 
 /** One page of the strip: readings, or a waiting card until prefetch lands. */
-function WeatherPane({ forecast, city, cities, active, loading, side, onFocusIsland, onStep, onJump }: WeatherPaneProps) {
+function WeatherPane({ forecast, city, cities, active, loading, side, onFocusIsland, onJump }: WeatherPaneProps) {
   return (
     <div className={side ? "wx-pane is-side" : "wx-pane"}>
       {forecast ? (
@@ -290,7 +261,6 @@ function WeatherPane({ forecast, city, cities, active, loading, side, onFocusIsl
           active={active}
           loading={loading}
           onFocusIsland={onFocusIsland}
-          onStep={onStep}
           onJump={onJump}
         />
       ) : (
@@ -317,7 +287,6 @@ export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
   const busy = useRef(false);
   const flight = useRef<{ to: number } | null>(null);
   const timers = useRef<number[]>([]);
-  const shineId = useRef(0);
   // Drag frames are coalesced to one style write per display refresh, and the
   // last painted offset is what the release glide animates from.
   const frame = useRef(0);
@@ -329,7 +298,6 @@ export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
   // the hook's active index has caught up with it.
   const [center, setCenter] = useState<number | null>(null);
   const [recenter, setRecenter] = useState(0);
-  const [shine, setShine] = useState<{ dir: number; key: number } | null>(null);
 
   const count = cities.length;
   const shown = center !== null && center < count ? center : active;
@@ -460,15 +428,11 @@ export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
     if (!delta || busy.current || count < 2) return;
     const from = shown;
     const to = wrap(from + delta);
-    const dir = Math.sign(delta);
     busy.current = true;
     flight.current = { to };
     setCenter(from);
     step(delta);
-    shineId.current += 1;
-    setShine({ dir, key: shineId.current });
-    later(() => setShine(null), 800);
-    glide(-dir * (bodyRef.current?.clientWidth || 260));
+    glide(-Math.sign(delta) * (bodyRef.current?.clientWidth || 260));
   };
 
   const jump = (index: number) => {
@@ -492,7 +456,10 @@ export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
 
   const begin = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (drag.current || busy.current || count < 2 || !forecastAt(shown)) return;
-    if ((event.target as HTMLElement).closest("button")) return;
+    const target = event.target as HTMLElement;
+    // Edge arrows sit under the pointer across the outer 20% bands; a drag that
+    // starts there should still page the strip, so only the dots block it.
+    if (target.closest("button") && !target.closest(".wx-edge")) return;
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, width: 0, locked: false };
     onFocusIsland();
   };
@@ -604,7 +571,6 @@ export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
                 active={wrap(shown - 1)}
                 loading={false}
                 onFocusIsland={onFocusIsland}
-                onStep={() => undefined}
                 onJump={() => undefined}
               />
             )}
@@ -615,7 +581,6 @@ export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
               active={shown}
               loading={loading}
               onFocusIsland={onFocusIsland}
-              onStep={(delta) => slideTo(delta)}
               onJump={jump}
             />
             {!solo && (
@@ -627,17 +592,33 @@ export function WeatherPanel({ weather, onFocusIsland }: WeatherPanelProps) {
                 active={wrap(shown + 1)}
                 loading={false}
                 onFocusIsland={onFocusIsland}
-                onStep={() => undefined}
                 onJump={() => undefined}
               />
             )}
           </div>
-          {shine && (
-            <span
-              className={shine.dir > 0 ? "wx-sheen" : "wx-sheen is-prev"}
-              key={`sheen-${shine.key}`}
-              aria-hidden="true"
-            />
+          {!solo && (
+            <>
+              <button
+                type="button"
+                className="wx-edge is-prev"
+                onPointerEnter={onFocusIsland}
+                onClick={() => slideTo(-1)}
+                title="上一个城市"
+                aria-label="上一个城市"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="wx-edge is-next"
+                onPointerEnter={onFocusIsland}
+                onClick={() => slideTo(1)}
+                title="下一个城市"
+                aria-label="下一个城市"
+              >
+                ›
+              </button>
+            </>
           )}
         </div>
       )}

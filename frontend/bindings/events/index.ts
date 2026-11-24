@@ -29,6 +29,11 @@ export const ClipboardUpdate = "clipboard:update";
 export const IslandOpenTab = "island:open-tab";
 
 /**
+ * Name of the custom event "notices:update".
+ */
+export const NoticesUpdate = "notices:update";
+
+/**
  * Name of the custom event "sysinfo:update".
  */
 export const SysinfoUpdate = "sysinfo:update";

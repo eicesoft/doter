@@ -5,8 +5,10 @@ import * as AgentsService from "./agentsservice.js";
 import * as ClipboardService from "./clipboardservice.js";
 import * as IslandService from "./islandservice.js";
 import * as MusicService from "./musicservice.js";
+import * as NoticeService from "./noticeservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as SystemService from "./systemservice.js";
+import * as TranslateService from "./translateservice.js";
 import * as UpdateService from "./updateservice.js";
 import * as WeatherService from "./weatherservice.js";
 export {
@@ -14,8 +16,10 @@ export {
     ClipboardService,
     IslandService,
     MusicService,
+    NoticeService,
     SettingsService,
     SystemService,
+    TranslateService,
     UpdateService,
     WeatherService
 };

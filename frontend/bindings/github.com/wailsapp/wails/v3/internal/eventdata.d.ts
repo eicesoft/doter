@@ -16,6 +16,9 @@ import type * as alerts$0 from "../../../../../doter/internal/alerts/models.js";
 import type * as clipboard$0 from "../../../../../doter/internal/clipboard/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import type * as notice$0 from "../../../../../doter/internal/notice/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import type * as sysinfo$0 from "../../../../../doter/internal/sysinfo/models.js";
 
 declare module "@wailsio/runtime" {
@@ -25,6 +28,7 @@ declare module "@wailsio/runtime" {
             "alerts:update": alerts$0.Alert;
             "clipboard:update": clipboard$0.Entry;
             "island:open-tab": string;
+            "notices:update": notice$0.Snapshot;
             "sysinfo:update": sysinfo$0.Snapshot;
         }
     }

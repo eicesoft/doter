@@ -7,12 +7,18 @@ package notch
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
 
-static int islandMouseInside(void *nsWindow) {
+static int islandMouseInside(void *nsWindow, double bottomInset) {
 	NSWindow *window = (NSWindow *)nsWindow;
 	if (window == nil || !window.isVisible) {
 		return 0;
 	}
 	NSRect frame = NSInsetRect(window.frame, -2, -2);
+	// AppKit's y axis points up, so the toast strip below the pill is the
+	// bottom inset: keep the top edge, raise the bottom one.
+	if (bottomInset > 0) {
+		frame.origin.y += bottomInset;
+		frame.size.height -= bottomInset;
+	}
 	NSPoint p = [NSEvent mouseLocation];
 	return NSPointInRect(p, frame) ? 1 : 0;
 }
@@ -35,7 +41,7 @@ var (
 // hover events to the webview while the window is key, and a non-activating
 // panel never becomes key from hovering, so the pointer position is polled
 // against the window frame instead.
-func watchHover(nsWindow unsafe.Pointer, handler func(bool)) {
+func watchHover(nsWindow unsafe.Pointer, bottomInset func() float64, handler func(bool)) {
 	if nsWindow == nil {
 		return
 	}
@@ -53,7 +59,7 @@ func watchHover(nsWindow unsafe.Pointer, handler func(bool)) {
 	go func() {
 		inside := false
 		for {
-			nowInside := C.islandMouseInside(nsWindow) != 0
+			nowInside := C.islandMouseInside(nsWindow, C.double(bottomInset())) != 0
 			if nowInside != inside {
 				inside = nowInside
 				hoverMu.RLock()

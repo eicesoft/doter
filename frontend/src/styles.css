@@ -211,6 +211,91 @@ body {
   justify-content: center;
 }
 
+/* --- Agent toast ---------------------------------------------------------- */
+
+/* A notification bubble hanging below the idle pill. The native window grows
+   ToastHeight taller while it is up (see internal/notch), so the space below
+   the island exists at all. */
+.agent-toast {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* A capsule as wide as the collapsed island. */
+  padding: 7px 18px 8px 17px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background-color: rgba(10, 12, 17, 0.94);
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--toast-color) 12%, transparent),
+    transparent 70%
+  );
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  pointer-events: none;
+  animation: agent-toast-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Left rail: a pale wash of the state's colour. */
+.agent-toast::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  width: 3px;
+  height: 55%;
+  transform: translateY(-50%);
+  border-radius: 99px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.agent-toast[data-kind="agent-idle"] {
+  --toast-color: rgba(91, 157, 255, 0.9);
+  color: var(--accent-mem);
+}
+
+.agent-toast[data-kind="agent-done"] {
+  --toast-color: rgba(91, 157, 255, 0.9);
+  color: var(--accent-mem);
+}
+
+.agent-toast[data-kind="notice"] {
+  --toast-color: rgba(34, 211, 238, 0.85);
+  color: var(--accent-net);
+}
+
+.agent-toast-title {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.agent-toast-detail {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+@keyframes agent-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .stat-dot.is-hidden {
   visibility: hidden;
 }
@@ -1133,7 +1218,9 @@ body {
    single full-width card. */
 .panel-body[data-tab="music"],
 .panel-body[data-tab="clipboard"],
+.panel-body[data-tab="translate"],
 .panel-body[data-tab="calendar"],
+.panel-body[data-tab="notifications"],
 .panel-body[data-tab="agents"],
 .panel-body[data-tab="weather"] {
   grid-template-rows: minmax(0, 1fr);
@@ -1560,6 +1647,195 @@ body {
   overflow: hidden;
 }
 
+/* --- Translate panel ----------------------------------------------------- */
+
+/* The editor owns the card's height; the result scrolls inside it. */
+.panel-body[data-tab="translate"] .card-body {
+  justify-content: stretch;
+  overflow: hidden;
+}
+
+
+
+.tr-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tr-target {
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10.5px;
+  outline: 0;
+  cursor: pointer;
+}
+
+.tr-target:focus-visible {
+  border-color: rgba(91, 157, 255, 0.45);
+}
+
+.tr-input {
+  flex: 1;
+  min-height: 56px;
+  padding: 9px 10px;
+  resize: none;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  outline: 0;
+  /* The app bans text selection globally; an editor needs it back. */
+  user-select: text;
+  -webkit-user-select: text;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.tr-input:focus {
+  border-color: rgba(91, 157, 255, 0.4);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.tr-input::placeholder {
+  color: var(--dim);
+}
+
+.tr-run {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tr-hint {
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.tr-go {
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid rgba(91, 157, 255, 0.34);
+  border-radius: 7px;
+  background: rgba(91, 157, 255, 0.16);
+  color: #dce8ff;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.tr-go:hover:not(:disabled) {
+  background: rgba(91, 157, 255, 0.26);
+  border-color: rgba(91, 157, 255, 0.5);
+}
+
+.tr-go:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tr-error {
+  margin: 0;
+  font-size: 10px;
+  color: var(--accent-danger);
+}
+
+.tr-result {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tr-text {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* A 6px track always reserved; the thumb paints 3px of it via a transparent
+   border, so hovering widens it in place without reflowing the text. */
+.tr-input::-webkit-scrollbar,
+.tr-result::-webkit-scrollbar,
+.tr-text::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tr-input::-webkit-scrollbar-track,
+.tr-result::-webkit-scrollbar-track,
+.tr-text::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tr-input::-webkit-scrollbar-thumb,
+.tr-result::-webkit-scrollbar-thumb,
+.tr-text::-webkit-scrollbar-thumb {
+  border: 1.5px solid transparent;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  background-clip: padding-box;
+}
+
+.tr-input::-webkit-scrollbar-thumb:hover,
+.tr-result::-webkit-scrollbar-thumb:hover,
+.tr-text::-webkit-scrollbar-thumb:hover {
+  border-width: 0.5px;
+  background: rgba(91, 157, 255, 0.6);
+  background-clip: padding-box;
+  box-shadow: 0 0 6px rgba(91, 157, 255, 0.45);
+}
+
+.tr-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.tr-copy {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.tr-copy:hover {
+  color: var(--text);
+}
+
 /* --- Weather panel ------------------------------------------------------- */
 
 .panel-body[data-tab="weather"] .card-body {
@@ -1703,54 +1979,6 @@ body {
 }
 
 /* A light sweep across the card as the new city lands. */
-.wx-sheen {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-.wx-sheen::before {
-  content: "";
-  position: absolute;
-  top: -30%;
-  bottom: -30%;
-  left: -60%;
-  width: 70%;
-  background: linear-gradient(
-    100deg,
-    transparent,
-    color-mix(in srgb, var(--accent) 24%, transparent) 35%,
-    rgba(255, 255, 255, 0.26) 50%,
-    color-mix(in srgb, var(--accent) 18%, transparent) 65%,
-    transparent
-  );
-  animation: wx-sheen 620ms cubic-bezier(0.3, 0.6, 0.2, 1) 60ms both;
-  will-change: transform, opacity;
-}
-
-/* Going back, the highlight travels the other way. The keyframes fade in and
-   out symmetrically, so reversing them still looks right. */
-.wx-sheen.is-prev::before {
-  animation-direction: reverse;
-}
-
-@keyframes wx-sheen {
-  from {
-    transform: translateX(0) skewX(-14deg);
-    opacity: 0;
-  }
-  40% {
-    opacity: 0.85;
-  }
-  to {
-    transform: translateX(260%) skewX(-14deg);
-    opacity: 0;
-  }
-}
-
 /* --- Current conditions -------------------------------------------------- */
 
 .wx-hero {
@@ -1858,37 +2086,67 @@ body {
   flex: none;
 }
 
-/* City switching sits in the location line so the hero stays one block. */
-.wx-city-step {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--muted);
+/* City arrows: the outer 20% band on each side is the button itself. The band
+   paints an edge fade in the island's own tint, so it melts into the backdrop
+   instead of sitting on it like a chip. */
+.wx-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 20%;
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 0;
+  /* The UA button face would show as a pale wash where the fade is clear. */
+  background-color: transparent;
+  /* Symmetric fade centred on the arrow: transparent | tint | transparent. */
+  background-image: linear-gradient(
+    to right,
+    rgba(10, 12, 17, 0) 0%,
+    rgba(10, 12, 17, 0.42) 50%,
+    rgba(10, 12, 17, 0) 100%
+  );
+  color: rgba(255, 255, 255, 0.92);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 26px;
+  font-weight: 500;
   line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition:
-    color 140ms ease,
-    background 140ms ease,
-    border-color 140ms ease,
-    transform 120ms ease;
+  /* The fade image is only as wide as the arrow needs; it never spans the
+     whole 20% hover band. */
+  background-repeat: no-repeat;
+  background-size: 30px 100%;
+  /* Fade the band itself at the top and bottom, so it has no square ends and
+     stays a compact patch around the arrow instead of a full-height stripe. */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 35%,
+    #000 47%,
+    #000 53%,
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
 
-.wx-city-step:hover {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.09);
+.wx-edge.is-prev {
+  left: 0;
+  justify-content: flex-start;
+  background-position: left center;
 }
 
-.wx-city-step:active {
-  transform: scale(0.92);
+.wx-edge.is-next {
+  right: 0;
+  justify-content: flex-end;
+  background-position: right center;
+}
+
+.wx-edge:hover,
+.wx-edge:focus-visible {
+  opacity: 1;
 }
 
 /* Page dots: the active city stretches into an accent-tinted pill. */
@@ -2661,7 +2919,8 @@ body {
 
 /* --- Agents panel --------------------------------------------------------- */
 
-.panel-body[data-tab="agents"] .card-body {
+.panel-body[data-tab="agents"] .card-body,
+.panel-body[data-tab="notifications"] .card-body {
   justify-content: flex-start;
   overflow: hidden;
 }
@@ -2704,21 +2963,21 @@ body {
 }
 
 .agents-stat.is-running {
-  border-color: rgba(53, 208, 127, 0.18);
-  background: rgba(53, 208, 127, 0.07);
-}
-
-.agents-stat.is-running b {
-  color: var(--accent-cpu);
-}
-
-.agents-stat.is-idle {
   border-color: rgba(251, 191, 36, 0.16);
   background: rgba(251, 191, 36, 0.06);
 }
 
-.agents-stat.is-idle b {
+.agents-stat.is-running b {
   color: var(--accent-battery);
+}
+
+.agents-stat.is-waiting {
+  border-color: rgba(91, 157, 255, 0.2);
+  background: rgba(91, 157, 255, 0.08);
+}
+
+.agents-stat.is-waiting b {
+  color: var(--accent-mem);
 }
 
 .agents-live {
@@ -2769,6 +3028,7 @@ body {
     background 160ms ease,
     border-color 160ms ease,
     opacity 160ms ease;
+  cursor: pointer;
 }
 
 .agent-row[data-agent="claude"] {
@@ -2777,6 +3037,18 @@ body {
 
 .agent-row[data-agent="codex"] {
   --agent-accent: var(--accent-cpu);
+}
+
+.agent-row[data-agent="opencode"] {
+  --agent-accent: #7dd3fc;
+}
+
+.agent-row[data-agent="pi"] {
+  --agent-accent: #a78bfa;
+}
+
+.agent-row[data-agent="omp"] {
+  --agent-accent: #34d399;
 }
 
 .agent-row:hover {
@@ -2792,6 +3064,11 @@ body {
   border-color: color-mix(in srgb, var(--agent-accent) 30%, rgba(255, 255, 255, 0.06));
 }
 
+.agent-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agent-accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
 .agent-badge {
   width: 28px;
   height: 28px;
@@ -2804,6 +3081,12 @@ body {
   font-size: 11px;
   font-weight: 700;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.agent-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 
 .agent-main {
@@ -2849,6 +3132,24 @@ body {
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding: 0 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.agent-project[data-receipt="copied"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--agent-accent) 16%, transparent);
+}
+
+.agent-project[data-receipt="failed"] {
+  color: var(--accent-danger);
 }
 
 .agent-branch {
@@ -2902,25 +3203,25 @@ body {
 }
 
 .agent-status.is-running {
-  color: var(--accent-cpu);
-  border-color: rgba(53, 208, 127, 0.25);
-  background: rgba(53, 208, 127, 0.1);
+  color: var(--accent-battery);
+  border-color: rgba(251, 191, 36, 0.2);
+  background: rgba(251, 191, 36, 0.08);
 }
 
 .agent-status.is-running i {
   animation: agent-blink 1.4s ease-in-out infinite;
 }
 
-.agent-status.is-idle {
-  color: var(--accent-battery);
-  border-color: rgba(251, 191, 36, 0.2);
-  background: rgba(251, 191, 36, 0.08);
+.agent-status.is-waiting {
+  color: var(--accent-mem);
+  border-color: rgba(91, 157, 255, 0.25);
+  background: rgba(91, 157, 255, 0.1);
 }
 
 .agent-status.is-done {
-  color: var(--dim);
-  border-color: rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.03);
+  color: var(--accent-cpu);
+  border-color: rgba(53, 208, 127, 0.25);
+  background: rgba(53, 208, 127, 0.1);
 }
 
 .agent-time {
@@ -2955,6 +3256,224 @@ body {
 .agents-empty span {
   font-size: 10px;
   color: var(--muted);
+}
+
+/* Notification count beside the card title. */
+.notice-count {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent-net);
+  font-variant-numeric: tabular-nums;
+}
+
+.notice-clear {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--dim);
+  appearance: none;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.notice-clear svg {
+  width: 12px;
+  height: 12px;
+}
+
+.notice-clear:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.notice-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Notifications from one app stack under a single head row. */
+.notice-group {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notice-stack {
+  position: relative;
+  z-index: 0;
+  flex: none;
+  width: 100%;
+}
+
+/* Collapsed stacks show up to three dimmed cards peeking out below the
+   newest one; each is narrower and offset a little further down. They sit
+   behind the front card but never bleed over the next group. */
+.notice-stack-layer {
+  position: absolute;
+  z-index: -1;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* Frosted plates: a light tint, grain and a thin rim instead of a solid
+     dark card, so the layers read as glass rather than stacked slabs. */
+  background-color: rgba(26, 30, 38, 0.42);
+  background-image:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
+    var(--frost-grain);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.notice-stack > .notice-row {
+  position: relative;
+  z-index: 1;
+}
+
+.notice-row[data-nested="true"] {
+  background-color: rgba(22, 26, 34, 0.38);
+}
+
+.notice-badge {
+  flex: none;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 99px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notification rows: app icon, one-line message and time. */
+.notice-row {
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* Frosted plate: mostly transparent tint + grain, with just a whisper of
+     blur and an edge highlight to keep it flat rather than 3D. */
+  background-color: rgba(28, 32, 41, 0.42);
+  background-image:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035)),
+    var(--frost-grain);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.notice-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  appearance: none;
+  cursor: pointer;
+}
+
+.notice-remove {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity 150ms ease,
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.notice-remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+.notice-remove:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.notice-row:hover .notice-remove,
+.notice-remove:focus-visible {
+  opacity: 1;
+}
+
+.notice-row:hover {
+  background-color: rgba(42, 47, 58, 0.5);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.notice-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
+.notice-icon.is-fallback {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.notice-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.notice-text b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notice-time {
+  flex: none;
+  font-size: 9px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes agent-blink {

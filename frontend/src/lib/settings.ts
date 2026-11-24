@@ -10,7 +10,15 @@ export type CardKey =
   | "processes";
 
 /** Pages of the expanded dashboard; matches the bottom tab bar order. */
-export type TabKey = "overview" | "calendar" | "clipboard" | "weather" | "music" | "agents";
+export type TabKey =
+  | "overview"
+  | "calendar"
+  | "notifications"
+  | "clipboard"
+  | "translate"
+  | "weather"
+  | "music"
+  | "agents";
 
 /** The two metrics shown in the idle pill. */
 export type CollapsedMetric =
@@ -44,8 +52,10 @@ export const TAB_OPTIONS: readonly {
 }[] = [
   { key: "overview", label: "系统总览", accent: "var(--accent-cpu)", locked: true },
   { key: "calendar", label: "日历", accent: "var(--accent-sys)" },
+  { key: "notifications", label: "通知", accent: "var(--accent-net)" },
   { key: "clipboard", label: "剪切板", accent: "var(--accent-disk)" },
   { key: "weather", label: "天气", accent: "var(--accent-net)" },
+  { key: "translate", label: "翻译", accent: "var(--accent-mem)" },
   { key: "music", label: "音乐", accent: "var(--accent-net)" },
   { key: "agents", label: "Agent 监控", accent: "var(--accent-cpu)" },
 ];
@@ -101,7 +111,9 @@ export const DEFAULT_SETTINGS: Settings = {
   tabs: {
     overview: true,
     calendar: true,
+    notifications: true,
     clipboard: true,
+    translate: true,
     weather: true,
     music: true,
     agents: true,

@@ -123,6 +123,32 @@ export function formatTokens(value: number): string {
 }
 
 /** Relative time for clipboard entries: 刚刚, 5 分钟前, 昨天, 11-08. */
+const APP_LABELS: Record<string, string> = {
+  "com.apple.mail": "邮件",
+  "com.apple.mobilesms": "信息",
+  "com.apple.facetime": "FaceTime",
+  "com.apple.reminders": "提醒事项",
+  "com.apple.calendar": "日历",
+  "com.apple.systempreferences": "系统设置",
+  "com.tencent.xinWeChat": "微信",
+  "com.bytedance.lark": "飞书",
+  "com.tinyspeck.slackmacgap": "Slack",
+  "com.microsoft.Outlook": "Outlook",
+};
+
+/** appLabel turns a bundle id or AUMID into a short, readable app name. */
+export function appLabel(id: string): string {
+  const clean = id.replace(/^_system_center_:/, "");
+  const known = APP_LABELS[clean];
+  if (known) return known;
+
+  // Windows AUMIDs look like `Microsoft.Windows.Photos_8wekyb3d8bbwe!App`.
+  const base = clean.split("!")[0];
+  const tail = base.split(".").pop() ?? base;
+  const name = tail.replace(/_[A-Za-z0-9]+$/, "");
+  return name || clean;
+}
+
 export function formatRelTime(timestamp: number, now: number = Date.now()): string {
   if (!Number.isFinite(timestamp) || timestamp <= 0) return "—";
 

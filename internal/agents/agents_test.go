@@ -44,6 +44,9 @@ func TestClaudeIncrementalParse(t *testing.T) {
 	if state.waiting {
 		t.Error("tool_use must leave the session running")
 	}
+	if !state.awaiting {
+		t.Error("a tool call without its result must mark the session blocked")
+	}
 
 	appendFile(t, path, `{"type":"assistant","timestamp":"2026-11-19T08:00:02Z","message":{"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":200}}}
 {"type":"assistant","timestamp":"2026-11-19T08:00:03Z","message":{"stop_reason":"end_turn"}}
@@ -53,6 +56,9 @@ func TestClaudeIncrementalParse(t *testing.T) {
 	if !state.waiting {
 		t.Error("end_turn must mark the session idle")
 	}
+	if state.awaiting {
+		t.Error("end_turn must clear the blocked flag")
+	}
 	if state.session.InputTokens != 110 || state.session.OutputTokens != 25 || state.session.CachedTokens != 250 {
 		t.Errorf("tokens after append = %+v", state.session)
 	}
@@ -61,6 +67,15 @@ func TestClaudeIncrementalParse(t *testing.T) {
 	}
 	if state.session.LastActivity != parseTimestamp("2026-11-19T08:00:03Z") {
 		t.Errorf("last activity = %d", state.session.LastActivity)
+	}
+
+	// Claude Code writes last-prompt after the turn's end_turn; it must not
+	// flip the finished session back to running.
+	appendFile(t, path, `{"type":"last-prompt","lastPrompt":"Fix the login bug"}
+`)
+	parseClaudeFile(path, mustStat(t, path), state)
+	if !state.waiting {
+		t.Error("last-prompt after end_turn must keep the session idle")
 	}
 }
 
@@ -104,6 +119,21 @@ func TestCodexParse(t *testing.T) {
 	if state.session.ProjectName != "demo" {
 		t.Error("a later cwd must not replace the project root")
 	}
+
+	appendFile(t, path, `{"timestamp":"2026-11-19T09:00:06Z","type":"event_msg","payload":{"type":"task_started"}}
+{"timestamp":"2026-11-19T09:00:07Z","type":"response_item","payload":{"type":"function_call","name":"shell"}}
+`)
+	parseCodexFile(path, mustStat(t, path), state)
+	if !state.awaiting {
+		t.Error("a function call without its output must mark the session blocked")
+	}
+
+	appendFile(t, path, `{"timestamp":"2026-11-19T09:00:08Z","type":"response_item","payload":{"type":"function_call_output","output":"ok"}}
+`)
+	parseCodexFile(path, mustStat(t, path), state)
+	if state.awaiting {
+		t.Error("a function call output must clear the blocked flag")
+	}
 }
 
 func TestSessionStatus(t *testing.T) {
@@ -112,12 +142,17 @@ func TestSessionStatus(t *testing.T) {
 	if got := sessionStatus(running, now); got != StatusRunning {
 		t.Errorf("live working session = %q", got)
 	}
-	idle := &sessionEntry{session: Session{PID: 42, LastActivity: now.UnixMilli()}, waiting: true}
-	if got := sessionStatus(idle, now); got != StatusIdle {
-		t.Errorf("live waiting session = %q", got)
+	awaiting := &sessionEntry{session: Session{PID: 42, LastActivity: now.UnixMilli()}, awaiting: true}
+	if got := sessionStatus(awaiting, now); got != StatusWaiting {
+		t.Errorf("live blocked session = %q", got)
 	}
-	done := &sessionEntry{session: Session{LastActivity: now.Add(-time.Hour).UnixMilli()}, waiting: true}
-	if got := sessionStatus(done, now); got != StatusDone {
+	// A finished turn is done even while its CLI stays open.
+	finished := &sessionEntry{session: Session{PID: 42, LastActivity: now.UnixMilli()}, waiting: true}
+	if got := sessionStatus(finished, now); got != StatusDone {
+		t.Errorf("finished turn = %q", got)
+	}
+	stale := &sessionEntry{session: Session{LastActivity: now.Add(-time.Hour).UnixMilli()}, awaiting: true}
+	if got := sessionStatus(stale, now); got != StatusDone {
 		t.Errorf("dead session = %q", got)
 	}
 }

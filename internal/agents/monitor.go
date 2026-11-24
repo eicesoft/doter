@@ -25,8 +25,8 @@ const (
 	activeGrace = 90 * time.Second
 )
 
-// Monitor tails the Claude/Codex session logs and matches them against live
-// agent processes. It owns the only goroutine that touches the parser state.
+// Monitor tails the agent session logs and matches them against live agent
+// processes. It owns the only goroutine that touches the parser state.
 type Monitor struct {
 	mu       sync.RWMutex
 	snapshot Snapshot
@@ -34,10 +34,11 @@ type Monitor struct {
 	started  bool
 
 	home string
-	// claude and codex keep the per-file read offset and running aggregates,
-	// so a sample only decodes freshly appended lines.
+	// claude, codex and pi keep the per-file read offset and running
+	// aggregates, so a sample only decodes freshly appended lines.
 	claude map[string]*claudeState
 	codex  map[string]*codexState
+	pi     map[string]*piState
 }
 
 // NewMonitor builds a monitor for the current user.
@@ -51,6 +52,7 @@ func NewMonitor() *Monitor {
 		home:    home,
 		claude:  make(map[string]*claudeState),
 		codex:   make(map[string]*codexState),
+		pi:      make(map[string]*piState),
 		snapshot: Snapshot{
 			Sessions: []Session{},
 		},
@@ -106,12 +108,15 @@ func (m *Monitor) publish() {
 	}
 }
 
-// sessionEntry pairs a parsed session with the parser-only lifecycle flag.
+// sessionEntry pairs a parsed session with the parser-only lifecycle flags.
 type sessionEntry struct {
 	session Session
 	// waiting is true when the agent finished its turn and is waiting for the
 	// user. It is intentionally not part of the JSON payload.
 	waiting bool
+	// awaiting is true when a live turn is blocked on a tool call the user has
+	// to approve or answer. Parse-only, like waiting.
+	awaiting bool
 }
 
 func (m *Monitor) sampleOnce() {
@@ -121,6 +126,8 @@ func (m *Monitor) sampleOnce() {
 	if m.home != "" {
 		entries = append(entries, m.scanClaude(now)...)
 		entries = append(entries, m.scanCodex(now)...)
+		entries = append(entries, m.scanPi(now)...)
+		entries = append(entries, m.scanOpencode(now)...)
 	}
 
 	assignProcesses(entries)
@@ -144,8 +151,8 @@ func (m *Monitor) sampleOnce() {
 		switch entry.session.Status {
 		case StatusRunning:
 			snapshot.Running++
-		case StatusIdle:
-			snapshot.Idle++
+		case StatusWaiting:
+			snapshot.Waiting++
 		default:
 			snapshot.Done++
 		}
@@ -163,22 +170,27 @@ func (m *Monitor) sampleOnce() {
 	m.prune(now)
 }
 
+// sessionStatus maps the parser flags onto the panel's status. A finished turn
+// is done even while its CLI stays open; only a live turn is running, and a
+// live turn blocked on an unanswered tool call is waiting.
 func sessionStatus(entry *sessionEntry, now time.Time) string {
-	if entry.session.PID != 0 {
-		if entry.waiting {
-			return StatusIdle
-		}
-		return StatusRunning
+	if entry.waiting {
+		return StatusDone
 	}
 	// A log that is still being appended to is live even when the process scan
 	// missed it (agents may run behind a wrapper binary).
-	if now.Sub(time.UnixMilli(entry.session.LastActivity)) < activeGrace {
-		return StatusRunning
+	live := entry.session.PID != 0 ||
+		now.Sub(time.UnixMilli(entry.session.LastActivity)) < activeGrace
+	if !live {
+		return StatusDone
 	}
-	return StatusDone
+	if entry.awaiting {
+		return StatusWaiting
+	}
+	return StatusRunning
 }
 
-// agentProc is a live Claude/Codex process.
+// agentProc is a live agent process.
 type agentProc struct {
 	pid   int32
 	agent string
@@ -199,6 +211,13 @@ func scanAgentProcesses() []agentProc {
 			continue
 		}
 		agent := agentForName(name)
+		if agent == "" && strings.EqualFold(filepath.Base(strings.TrimSuffix(name, ".exe")), "node") {
+			// pi ships as a node script, so it only shows up on the command line.
+			cmdline, _ := p.Cmdline()
+			if isPiCommand(cmdline) {
+				agent = "pi"
+			}
+		}
 		if agent == "" {
 			continue
 		}
@@ -219,9 +238,23 @@ func agentForName(name string) string {
 		return "claude"
 	case "codex":
 		return "codex"
+	case "opencode":
+		return "opencode"
+	case "omp":
+		return "omp"
 	default:
 		return ""
 	}
+}
+
+// isPiCommand looks for the pi entry script among the process arguments.
+func isPiCommand(cmdline string) bool {
+	for _, field := range strings.Fields(cmdline) {
+		if strings.Contains(field, "/") && filepath.Base(field) == "pi" {
+			return true
+		}
+	}
+	return false
 }
 
 func isDesktopApp(exe string) bool {
@@ -273,6 +306,11 @@ func (m *Monitor) prune(now time.Time) {
 	for path, state := range m.codex {
 		if state.session.LastActivity < cutoff {
 			delete(m.codex, path)
+		}
+	}
+	for path, state := range m.pi {
+		if state.session.LastActivity < cutoff {
+			delete(m.pi, path)
 		}
 	}
 }
