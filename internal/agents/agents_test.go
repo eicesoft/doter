@@ -152,8 +152,8 @@ func TestSessionStatus(t *testing.T) {
 		t.Errorf("finished turn = %q", got)
 	}
 	stale := &sessionEntry{session: Session{LastActivity: now.Add(-time.Hour).UnixMilli()}, awaiting: true}
-	if got := sessionStatus(stale, now); got != StatusDone {
-		t.Errorf("dead session = %q", got)
+	if got := sessionStatus(stale, now); got != StatusEnded {
+		t.Errorf("session without a process = %q", got)
 	}
 }
 

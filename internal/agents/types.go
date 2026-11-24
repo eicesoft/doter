@@ -13,6 +13,8 @@ const (
 	StatusWaiting = "waiting"
 	// StatusDone means the turn ended, whether or not its CLI still runs.
 	StatusDone = "done"
+	// StatusEnded means the agent process has exited.
+	StatusEnded = "ended"
 )
 
 // Session is one agent conversation.
@@ -51,6 +53,7 @@ type Snapshot struct {
 	Running  int       `json:"running"`
 	Waiting  int       `json:"waiting"`
 	Done     int       `json:"done"`
+	Ended    int       `json:"ended"`
 	// InputTokens and OutputTokens sum every session in the window.
 	InputTokens  int64 `json:"inputTokens"`
 	OutputTokens int64 `json:"outputTokens"`

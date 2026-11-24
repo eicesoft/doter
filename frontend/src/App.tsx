@@ -278,6 +278,7 @@ function App() {
 
       <ExpandedPanel
         snapshot={snapshot}
+        agentSnapshot={agents.snapshot}
         staticInfo={staticInfo}
         cpuSeries={cpuSeries}
         netSeries={netSeries}

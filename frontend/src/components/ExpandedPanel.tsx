@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import type { Settings as BackendSettings } from "../../bindings/doter/internal/prefs/models";
+import type { Snapshot as AgentsSnapshot } from "../../bindings/doter/internal/agents/models";
 import type { ProcessStats, Snapshot, StaticInfo } from "../../bindings/doter/internal/sysinfo/models";
 import {
   KillProcess,
@@ -18,6 +19,7 @@ import {
   formatDuration,
   formatPercent,
   formatSpeed,
+  formatTokens,
   formatUptime,
   platformLabel,
   shortCPUModel,
@@ -38,6 +40,7 @@ import { SettingsPanel } from "./SettingsPanel";
 
 interface ExpandedPanelProps {
   snapshot: Snapshot | null;
+  agentSnapshot: AgentsSnapshot | null;
   staticInfo: StaticInfo | null;
   cpuSeries: number[];
   netSeries: number[];
@@ -76,6 +79,7 @@ function KV({ label, value }: { label: string; value: ReactNode }) {
 /** The hover dashboard. */
 export function ExpandedPanel({
   snapshot,
+  agentSnapshot,
   staticInfo,
   cpuSeries,
   netSeries,
@@ -663,8 +667,30 @@ export function ExpandedPanel({
         )}
 
         {activeTab === "agents" && (
-          <Card label="Agents" hint="Claude · Codex" accent="var(--accent-cpu)" wide>
-            <AgentsPanel onFocusIsland={onFocusIsland} />
+          <Card
+            label="Agents"
+            accent="var(--accent-cpu)"
+            wide
+            inline={
+              <div className="agents-inline">
+                <span className="is-running">
+                  <b>{agentSnapshot?.running ?? 0}</b>运行中
+                </span>
+                <span className="is-waiting">
+                  <b>{agentSnapshot?.waiting ?? 0}</b>等待
+                </span>
+                <span>
+                  <b>
+                    {formatTokens(
+                      (agentSnapshot?.inputTokens ?? 0) + (agentSnapshot?.outputTokens ?? 0),
+                    )}
+                  </b>
+                  Token
+                </span>
+              </div>
+            }
+          >
+            <AgentsPanel snapshot={agentSnapshot} onFocusIsland={onFocusIsland} />
           </Card>
         )}
       </div>

@@ -60,6 +60,7 @@ export interface Snapshot {
     "running": number;
     "waiting": number;
     "done": number;
+    "ended": number;
 
     /**
      * InputTokens and OutputTokens sum every session in the window.

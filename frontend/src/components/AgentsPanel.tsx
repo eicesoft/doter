@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Clipboard } from "@wailsio/runtime";
 
-import type { Session } from "../../bindings/doter/internal/agents/models";
-import { useAgentSessions } from "../hooks/useAgentSessions";
+import type { Session, Snapshot } from "../../bindings/doter/internal/agents/models";
 import { formatRelTime, formatTokens } from "../lib/format";
 import { resumeCommand } from "../lib/resume";
 import { AgentIcon } from "./AgentIcon";
@@ -21,6 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
   // or answer; a finished turn is done even while its CLI stays open.
   waiting: "等待输入",
   done: "已完成",
+  ended: "已结束",
 };
 
 const strokeProps = {
@@ -33,8 +33,13 @@ const strokeProps = {
 };
 
 /** The agent session monitor tab. */
-export function AgentsPanel({ onFocusIsland }: { onFocusIsland: () => void }) {
-  const { snapshot, live } = useAgentSessions();
+export function AgentsPanel({
+  snapshot,
+  onFocusIsland,
+}: {
+  snapshot: Snapshot | null;
+  onFocusIsland: () => void;
+}) {
   const sessions = snapshot?.sessions ?? [];
 
   // Relative timestamps and runtimes stay fresh while the panel is visible.
@@ -44,29 +49,8 @@ export function AgentsPanel({ onFocusIsland }: { onFocusIsland: () => void }) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const totalTokens = (snapshot?.inputTokens ?? 0) + (snapshot?.outputTokens ?? 0);
-
   return (
     <div className="agents-panel">
-      <div className="agents-summary">
-        <div className="agents-stat is-running">
-          <b>{snapshot?.running ?? 0}</b>
-          <span>运行中</span>
-        </div>
-        <div className="agents-stat is-waiting">
-          <b>{snapshot?.waiting ?? 0}</b>
-          <span>等待输入</span>
-        </div>
-        <div className="agents-stat">
-          <b>{formatTokens(totalTokens)}</b>
-          <span>Token 合计</span>
-        </div>
-        <div className="agents-live" data-live={live}>
-          <span className="brand-dot is-live" />
-          实时
-        </div>
-      </div>
-
       <div className="agents-list">
         {sessions.length === 0 ? (
           <div className="agents-empty">

@@ -153,6 +153,8 @@ func (m *Monitor) sampleOnce() {
 			snapshot.Running++
 		case StatusWaiting:
 			snapshot.Waiting++
+		case StatusEnded:
+			snapshot.Ended++
 		default:
 			snapshot.Done++
 		}
@@ -171,21 +173,21 @@ func (m *Monitor) sampleOnce() {
 }
 
 // sessionStatus maps the parser flags onto the panel's status. A finished turn
-// is done even while its CLI stays open; only a live turn is running, and a
-// live turn blocked on an unanswered tool call is waiting.
+// is done while its CLI stays open; once no process serves the session it is
+// ended. A live turn is running, or waiting when blocked on a user answer.
 func sessionStatus(entry *sessionEntry, now time.Time) string {
-	if entry.waiting {
-		return StatusDone
-	}
 	// A log that is still being appended to is live even when the process scan
 	// missed it (agents may run behind a wrapper binary).
 	live := entry.session.PID != 0 ||
 		now.Sub(time.UnixMilli(entry.session.LastActivity)) < activeGrace
 	if !live {
-		return StatusDone
+		return StatusEnded
 	}
 	if entry.awaiting {
 		return StatusWaiting
+	}
+	if entry.waiting {
+		return StatusDone
 	}
 	return StatusRunning
 }

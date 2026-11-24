@@ -2921,67 +2921,29 @@ body {
   gap: 9px;
 }
 
-.agents-summary {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
-}
-
-.agents-stat {
+.agents-inline {
   display: flex;
   align-items: baseline;
-  gap: 5px;
-  padding: 4px 9px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.agents-stat b {
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.agents-stat span {
+  gap: 7px;
+  min-width: 0;
   font-size: 9px;
-  color: var(--muted);
+  color: var(--dim);
+  white-space: nowrap;
 }
 
-.agents-stat.is-running {
-  border-color: rgba(251, 191, 36, 0.16);
-  background: rgba(251, 191, 36, 0.06);
+.agents-inline b {
+  margin-right: 3px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text);
 }
 
-.agents-stat.is-running b {
+.agents-inline .is-running b {
   color: var(--accent-battery);
 }
 
-.agents-stat.is-waiting {
-  border-color: rgba(91, 157, 255, 0.2);
-  background: rgba(91, 157, 255, 0.08);
-}
-
-.agents-stat.is-waiting b {
+.agents-inline .is-waiting b {
   color: var(--accent-mem);
-}
-
-.agents-live {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 8.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--dim);
-  text-transform: uppercase;
-}
-
-.agents-live[data-live="false"] .brand-dot {
-  display: none;
 }
 
 .agents-list {
@@ -3048,6 +3010,10 @@ body {
   opacity: 0.56;
 }
 
+.agent-row[data-status="ended"] {
+  opacity: 0.4;
+}
+
 .agent-row[data-status="running"] {
   border-color: color-mix(in srgb, var(--agent-accent) 30%, rgba(255, 255, 255, 0.06));
 }
@@ -3085,6 +3051,8 @@ body {
 }
 
 .agent-title {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -3210,6 +3178,12 @@ body {
   color: var(--accent-cpu);
   border-color: rgba(53, 208, 127, 0.25);
   background: rgba(53, 208, 127, 0.1);
+}
+
+.agent-status.is-ended {
+  color: var(--dim);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .agent-time {
