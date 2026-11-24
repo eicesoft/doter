@@ -104,7 +104,7 @@ function WeatherContent({
     <>
       <section className="wx-hero">
         <div className="wx-medallion">
-          <WeatherIcon code={forecast.current.code} size={58} night={!forecast.current.isDay} />
+          <WeatherIcon code={forecast.current.code} size={74} night={!forecast.current.isDay} />
         </div>
 
         <div className="wx-hero-main">
