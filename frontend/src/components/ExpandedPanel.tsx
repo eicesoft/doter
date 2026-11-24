@@ -223,7 +223,7 @@ export function ExpandedPanel({
         <div className="panel-identity">
           <span className="brand-dot is-live" />
           <div>
-            <div className="panel-brand">DOTER</div>
+            <div className="panel-brand">Doter</div>
             <div className="panel-host">
               {hostname} <span className="dot-sep">·</span> {platform}
             </div>
