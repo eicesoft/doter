@@ -55,6 +55,9 @@ function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const backend = useBackendSettings();
   const [toast, setToast] = useState<Toast | null>(null);
+  // The bubble's rect is measured from the DOM: its height follows the content,
+  // so the native glass layer cannot derive it from the window size.
+  const toastRef = useRef<HTMLDivElement | null>(null);
 
   // Agent alerts already carry the completion rules (run length, cooldown), so
   // the bubble mirrors the native notification instead of re-deriving state.
@@ -84,7 +87,38 @@ function App() {
   // The bubble hangs below the pill; the native window has to reserve that
   // room first and release it once the bubble is gone.
   useEffect(() => {
-    IslandService.SetToastVisible(toast !== null).catch(() => {});
+    let cancelled = false;
+
+    const sync = async () => {
+      // Grow the window first: the bubble only has room once it is taller.
+      await IslandService.SetToastVisible(toast !== null).catch(() => {});
+      if (cancelled) return;
+
+      if (!toast) {
+        await IslandService.SetToastGlass(false, 0, 0, 0, 0).catch(() => {});
+        return;
+      }
+
+      // One frame, so the webview has adopted the window's new size before the
+      // bubble is measured.
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+
+      const el = toastRef.current;
+      if (!el || cancelled) return;
+
+      const rect = el.getBoundingClientRect();
+      await IslandService
+        .SetToastGlass(true, rect.left, rect.top, rect.width, rect.height)
+        .catch(() => {});
+    };
+
+    void sync();
+
+    return () => {
+      cancelled = true;
+    };
   }, [toast]);
 
   useEffect(() => {
@@ -306,7 +340,7 @@ function App() {
       />
 
       {toast && !open && (
-        <div className="agent-toast" data-kind={toast.kind} role="status">
+        <div ref={toastRef} className="agent-toast" data-kind={toast.kind} role="status">
           <span className="agent-toast-title">{toast.title}</span>
           <span className="agent-toast-detail">{toast.detail}</span>
         </div>

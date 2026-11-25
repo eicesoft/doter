@@ -226,6 +226,14 @@ func (c *Controller) SetGlassVisible(visible bool) {
 	setNativeGlass(c.win.NativeWindow(), visible)
 }
 
+// SetToastGlass places the bubble's vibrancy layer on the rectangle the
+// frontend measured, or hides it when the bubble is gone. The rectangle is in
+// CSS px with its origin at the webview's top-left; the bubble's height depends
+// on its content, so the frontend has to pass it instead of deriving it here.
+func (c *Controller) SetToastGlass(visible bool, x, top, width, height float64) {
+	setNativeGlassRect(c.win.NativeWindow(), visible, x, top, width, height)
+}
+
 // ToggleExpanded flips the expansion state and reports the new value.
 func (c *Controller) ToggleExpanded() bool {
 	c.mu.Lock()

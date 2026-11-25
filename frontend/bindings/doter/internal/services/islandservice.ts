@@ -61,6 +61,13 @@ export function SetGlassVisible(visible: boolean): $CancellablePromise<void> {
 export function SetToastVisible(visible: boolean): $CancellablePromise<void> {
     return $Call.ByID(451072637, visible);
 }
+/**
+ * SetToastGlass shows or hides the bubble's native vibrancy layer on the
+ * rectangle the frontend measured from the toast element.
+ */
+export function SetToastGlass(visible: boolean, x: number, top: number, width: number, height: number): $CancellablePromise<void> {
+    return $Call.ByID(2770640271, visible, x, top, width, height);
+}
 
 /**
  * Show reveals the island.

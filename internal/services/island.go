@@ -32,6 +32,12 @@ func (s *IslandService) SetGlassVisible(visible bool) { s.ctrl.SetGlassVisible(v
 // bubble, and releases it once the bubble is gone.
 func (s *IslandService) SetToastVisible(visible bool) { s.ctrl.SetToastVisible(visible) }
 
+// SetToastGlass shows or hides the bubble's native vibrancy layer on the
+// rectangle the frontend measured from the toast element.
+func (s *IslandService) SetToastGlass(visible bool, x, top, width, height float64) {
+	s.ctrl.SetToastGlass(visible, x, top, width, height)
+}
+
 // ToggleExpanded flips the window size and returns the new state.
 func (s *IslandService) ToggleExpanded() bool {
 	return s.ctrl.ToggleExpanded()

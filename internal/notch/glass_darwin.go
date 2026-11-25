@@ -72,6 +72,68 @@ static void islandGlassUpdate(void *nsWindow, int visible) {
 
 	dispatch_async(dispatch_get_main_queue(), update);
 }
+
+static NSVisualEffectView *toastGlass = nil;
+
+// islandToastGlassUpdate places the bubble's vibrancy view on the rectangle the
+// frontend measured (CSS px, origin at the webview's top-left). AppKit's y axis
+// points up, so the frame's origin is the content height minus the bubble's
+// bottom edge. The bubble is a standalone card, so all four corners round.
+static void islandToastGlassUpdate(void *nsWindow, int visible,
+                                   double x, double top, double w, double h) {
+	if (nsWindow == nil) {
+		return;
+	}
+	NSWindow *window = (NSWindow *)nsWindow;
+
+	void (^update)(void) = ^{
+		NSView *content = window.contentView;
+		if (content == nil) {
+			return;
+		}
+
+		if (!visible) {
+			if (toastGlass == nil) {
+				return;
+			}
+			[toastGlass.layer removeAllAnimations];
+			toastGlass.hidden = YES;
+			toastGlass.alphaValue = 0;
+			return;
+		}
+
+		if (toastGlass == nil) {
+			toastGlass = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
+			toastGlass.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+			toastGlass.material = NSVisualEffectMaterialUnderWindowBackground;
+			toastGlass.state = NSVisualEffectStateActive;
+			toastGlass.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+			toastGlass.wantsLayer = YES;
+			// Matches the 12px radius in styles.css.
+			toastGlass.layer.cornerRadius = 12;
+			toastGlass.layer.masksToBounds = YES;
+			toastGlass.alphaValue = 0;
+			toastGlass.hidden = YES;
+			[content addSubview:toastGlass positioned:NSWindowBelow relativeTo:nil];
+		}
+
+		CGFloat H = content.bounds.size.height;
+		toastGlass.frame = NSMakeRect(x, H - top - h, w, h);
+
+		if (toastGlass.hidden) {
+			toastGlass.alphaValue = 0;
+		}
+		toastGlass.hidden = NO;
+
+		[NSAnimationContext beginGrouping];
+		[[NSAnimationContext currentContext] setDuration:0.18];
+		toastGlass.animator.alphaValue = 1.0;
+		[NSAnimationContext endGrouping];
+	};
+
+	dispatch_async(dispatch_get_main_queue(), update);
+}
+
 */
 import "C"
 
@@ -87,4 +149,18 @@ func setNativeGlass(nsWindow unsafe.Pointer, visible bool) {
 		v = 1
 	}
 	C.islandGlassUpdate(nsWindow, C.int(v))
+}
+
+// setNativeGlassRect places the bubble's vibrancy layer on the rectangle the
+// frontend measured (CSS px, origin at the webview's top-left).
+func setNativeGlassRect(nsWindow unsafe.Pointer, visible bool, x, top, width, height float64) {
+	if nsWindow == nil {
+		return
+	}
+	v := 0
+	if visible {
+		v = 1
+	}
+	C.islandToastGlassUpdate(nsWindow, C.int(v),
+		C.double(x), C.double(top), C.double(width), C.double(height))
 }
