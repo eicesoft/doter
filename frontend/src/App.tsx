@@ -85,39 +85,64 @@ function App() {
   }, []);
 
   // The bubble hangs below the pill; the native window has to reserve that
-  // room first and release it once the bubble is gone.
+  // room first and release it once the bubble is gone. The vibrancy layer is a
+  // native view behind the webview, not a CSS layer, so it only stays behind
+  // the card while every layout change is pushed back: the card's height
+  // follows its text, and the window resize lands a frame or two late.
   useEffect(() => {
+    if (!toast) {
+      void IslandService.SetToastVisible(false).catch(() => {});
+      void IslandService.SetToastGlass(false, 0, 0, 0, 0).catch(() => {});
+      return;
+    }
+
     let cancelled = false;
+    let frame = 0;
+    let settle: number | null = null;
 
-    const sync = async () => {
-      // Grow the window first: the bubble only has room once it is taller.
-      await IslandService.SetToastVisible(toast !== null).catch(() => {});
-      if (cancelled) return;
-
-      if (!toast) {
-        await IslandService.SetToastGlass(false, 0, 0, 0, 0).catch(() => {});
-        return;
-      }
-
-      // One frame, so the webview has adopted the window's new size before the
-      // bubble is measured.
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-
+    const push = () => {
       const el = toastRef.current;
-      if (!el || cancelled) return;
-
+      if (cancelled || !el) return;
       const rect = el.getBoundingClientRect();
-      await IslandService
+      void IslandService
         .SetToastGlass(true, rect.left, rect.top, rect.width, rect.height)
         .catch(() => {});
     };
 
-    void sync();
+    const schedule = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(push);
+    };
+
+    // Grow the window first: the bubble only has room once it is taller. One
+    // frame later the webview has adopted the new size, so the measured rect
+    // and the native view's coordinate space agree.
+    void IslandService.SetToastVisible(true)
+      .catch(() => {})
+      .then(() => {
+        if (cancelled) return;
+        window.requestAnimationFrame(() => {
+          if (cancelled) return;
+          push();
+          // The resize can land after the webview reflow; push once more once
+          // it has settled instead of leaving the layer on a stale rect.
+          settle = window.setTimeout(push, 120);
+        });
+      });
+
+    // A stale rect shows up as a second, larger rounded pane peeking out from
+    // behind the card, so follow the card for as long as it is on screen.
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    if (observer && toastRef.current) observer.observe(toastRef.current);
+    window.addEventListener("resize", schedule);
 
     return () => {
       cancelled = true;
+      observer?.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.cancelAnimationFrame(frame);
+      if (settle !== null) window.clearTimeout(settle);
     };
   }, [toast]);
 

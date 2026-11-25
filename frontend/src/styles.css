@@ -303,13 +303,14 @@ body {
 }
 
 @keyframes agent-toast-in {
+  /* Fade only: the native vibrancy layer is placed on the card's measured
+     rect, and a translate would move the card out from under it for the
+     duration of the animation. */
   from {
     opacity: 0;
-    transform: translateY(-6px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
