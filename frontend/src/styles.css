@@ -225,17 +225,37 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  /* A capsule as wide as the collapsed island. */
+  /* As wide as the collapsed island, but a card rather than a capsule. */
   padding: 7px 18px 8px 17px;
-  border-radius: 99px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background-color: rgba(10, 12, 17, 0.94);
-  background-image: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--toast-color) 12%, transparent),
-    transparent 70%
-  );
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  /* Mica: translucent enough for the native vibrancy to read through. */
+  background-color: rgba(14, 17, 24, 0.34);
+  background-image:
+    /* Top sheen, so the pane reads as glass rather than a flat block. */
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.11) 0%,
+      rgba(255, 255, 255, 0.04) 44%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    /* Hairline along the top edge, the same line the island draws. */
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.26), transparent),
+    /* Same wash as .island, at mica opacity. */
+    radial-gradient(
+      120% 150% at 50% 0%,
+      rgba(21, 25, 34, 0.42) 0%,
+      rgba(11, 13, 19, 0.32) 52%,
+      rgba(6, 7, 11, 0.28) 100%
+    );
+  background-position: 0 0, center top, 0 0;
+  /* One size per layer: the sheen stays full-size, only the hairline is 1px. */
+  background-size: auto, 76% 1px, auto;
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.24),
+    0 10px 26px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   pointer-events: none;
   animation: agent-toast-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -256,17 +276,14 @@ body {
 }
 
 .agent-toast[data-kind="agent-idle"] {
-  --toast-color: rgba(91, 157, 255, 0.9);
   color: var(--accent-mem);
 }
 
 .agent-toast[data-kind="agent-done"] {
-  --toast-color: rgba(91, 157, 255, 0.9);
   color: var(--accent-mem);
 }
 
 .agent-toast[data-kind="notice"] {
-  --toast-color: rgba(34, 211, 238, 0.85);
   color: var(--accent-net);
 }
 
